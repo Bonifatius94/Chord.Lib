@@ -65,14 +65,54 @@ namespace Chord.Config
             return int.Parse(Environment.GetEnvironmentVariable(ENV_SETTING_CHORD_PORT) ?? CHORD_DEFAULT_PORT);
         }
 
-        public static IPAddress GetIpv4NetworkId(IPAddress host, IPAddress subnet)
+        public static IPAddress GetIpv4NetworkId()
         {
+            // load chord network CIDR setting from environment variable
+            string networkCidr = Environment.GetEnvironmentVariable(ENV_SETTING_CHORD_NETWORK_CIDR);
 
+            // make sure that the environment variable is specified, otherwise it won't work
+            if (string.IsNullOrEmpty(networkCidr)) { throw new IOException("Network CIDR environment variable is not specified! Cannot continue without it!"); }
+
+            // make sure that the network CIDR mask is valid
+            const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
+            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
+
+            // split CIDR network mask at '/' separator
+            string[] parts = networkCidr.Split('/');
+            string networkId = parts[0];
+            int networkBitsCount = int.Parse(parts[1]);
+
+            // get numeric representation of network id, ip address and subnet mask
+            int networkIdBytes = BitConverter.ToInt32(IPAddress.Parse(networkId).GetAddressBytes(), 0);
+            int subnetMask = IPAddress.HostToNetworkOrder(-1 << (32 - networkBitsCount));
+
+            // compute the network address bitwise and return it as IP address object
+            return new IPAddress(networkIdBytes & subnetMask);
         }
 
-        public static IPAddress GetIpv4Broadcast(IPAddress host, IPAddress subnet)
+        public static IPAddress GetIpv4Broadcast()
         {
+            // load chord network CIDR setting from environment variable
+            string networkCidr = Environment.GetEnvironmentVariable(ENV_SETTING_CHORD_NETWORK_CIDR);
 
+            // make sure that the environment variable is specified, otherwise it won't work
+            if (string.IsNullOrEmpty(networkCidr)) { throw new IOException("Network CIDR environment variable is not specified! Cannot continue without it!"); }
+
+            // make sure that the network CIDR mask is valid
+            const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
+            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
+
+            // split CIDR network mask at '/' separator
+            string[] parts = networkCidr.Split('/');
+            string networkId = parts[0];
+            int networkBitsCount = int.Parse(parts[1]);
+
+            // get numeric representation of network id and subnet mask
+            int networkIdBytes = BitConverter.ToInt32(IPAddress.Parse(networkId).GetAddressBytes(), 0);
+            int subnetMask = IPAddress.HostToNetworkOrder(-1 << (32 - networkBitsCount));
+
+            // compute the broadcast using bitwise operations and return it as IP address object
+            return new IPAddress((networkIdBytes & subnetMask) | ~subnetMask);
         }
 
         #region Helpers
@@ -91,10 +131,8 @@ namespace Chord.Config
             // TODO: check if the regex works
 
             // make sure that the mask is valid
-            if (!Regex.IsMatch(networkCidr, "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"))
-            {
-                throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks.");
-            }
+            const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
+            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
 
             // split CIDR network mask at '/' separator
             string[] parts = networkCidr.Split('/');

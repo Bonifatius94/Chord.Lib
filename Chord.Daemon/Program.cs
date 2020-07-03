@@ -1,10 +1,11 @@
 ﻿using Chord.Config;
 using Chord.Lib;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
 using System;
-using System.Linq;
 using System.Net;
+using System.Numerics;
+using System.Security.Cryptography;
+using System.Threading;
 
 namespace Chord.Daemon
 {
@@ -27,16 +28,17 @@ namespace Chord.Daemon
                 var localEndpoint = new IPEndPoint(IpSettingsHelper.GetChordIpv4Address(), IpSettingsHelper.GetChordPort());
 
                 // write initialization message to console
-                logger.LogInformation($"Initializing: endpoint={ localEndpoint.Address }:{ localEndpoint.Port }, node id={ BitConverter.ToString(HashingHelper.GetSha1Hash(localEndpoint)) }");
+                logger.LogInformation($"Initializing: endpoint={ localEndpoint.Address }:{ localEndpoint.Port }, " +
+                    $"node id={ HexStringSerializer.Deserialize(HashingHelper.GetSha1Hash(localEndpoint)) }");
 
                 // initialize a new chord node
                 var node = new ChordNode(localEndpoint, logger);
-                var bootstrapNode = node.FindBootstrapNode();
-                node.JoinNetwork().Wait();
+                node.FindBootstrapNode(IpSettingsHelper.GetIpv4NetworkId(), IpSettingsHelper.GetIpv4Broadcast())
+                    .ContinueWith(bootstrapNode => node.JoinNetwork(bootstrapNode.Result)).Wait();
 
                 // attach to process exit event for a graceful shutdown
-                AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) => {
-
+                AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) =>
+                {
                     logger.LogInformation($"Exiting: Graceful exit procedure started");
 
                     // shutdown chord node gracefully
@@ -49,8 +51,28 @@ namespace Chord.Daemon
                 // write initialization success message to console
                 logger.LogInformation($"Initializing: successful! Going into idle state ...");
 
-                // wait until daemon process gets killed from outside
-                Console.Read();
+                // initialize random number generator
+                using (var rng = new RNGCryptoServiceProvider())
+                {
+                    // send random key lookup messages for testing the chord network
+                    while (true)
+                    {
+                        // generate a random key
+                        byte[] bytes = new byte[20];
+                        rng.GetBytes(bytes);
+
+                        // send a lookup request for the generated key
+                        node.LookupKey(new BigInteger(bytes))
+                            .ContinueWith(key => 
+                                logger.LogInformation(
+                                    $"Lookup: key '{ HexStringSerializer.Deserialize(bytes) }' " +
+                                    $"is managed by node with id '{ HexStringSerializer.Deserialize(key.Result.ToByteArray()) }'"))
+                            .Wait();
+
+                        // sleep for 1 sec
+                        Thread.Sleep(1000);
+                    }
+                }
             }
             catch (Exception ex)
             {
