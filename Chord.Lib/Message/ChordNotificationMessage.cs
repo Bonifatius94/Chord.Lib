@@ -6,6 +6,8 @@ namespace Chord.Lib.Message
 {
     public class ChordNotificationMessage : IChordMessage
     {
+        public ChordMessageType Type { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
         public byte[] GetAsBinary()
         {
             // TODO: implement logic

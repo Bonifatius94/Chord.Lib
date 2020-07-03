@@ -46,7 +46,7 @@ namespace Chord.Config
             var ipAddresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(x => x.AddressFamily == AddressFamily.InterNetwork).ToList();
 
             // determine the first IP address that is part of the given network mask (default: use first IP address available)
-            var chordIpv4Address = (networkCidr != null ? ipAddresses.FirstOrDefault(address => isPartOfNetwork(address.ToString(), networkCidr)) : ipAddresses.FirstOrDefault();
+            var chordIpv4Address = networkCidr != null ? ipAddresses.FirstOrDefault(address => isPartOfNetwork(address.ToString(), networkCidr)) : ipAddresses.FirstOrDefault();
 
             // make sure that an IP address was found
             if (string.IsNullOrEmpty(chordIpv4Address?.ToString())) { throw new IOException("No suitable ethernet interface detected! Cannot connect to other peers!"); }

@@ -44,9 +44,8 @@ namespace Chord.Lib
         /// </summary>
         private ILogger _logger;
 
-        private ChordClient _client;
-
-        private ChordServer _server;
+        private ChordClient _client = new ChordClient();
+        private ChordServer _server = new ChordServer();
         private CancellationTokenSource _serverListenerCancel;
 
         /// <summary>
@@ -148,13 +147,14 @@ namespace Chord.Lib
         }
 
         /// <summary>
-        /// 
+        /// Join the P2P network using the given bootstrap node.
         /// </summary>
-        /// <param name="bootstrapNode"></param>
+        /// <param name="bootstrapNode">The bootstrap node used for joining the P2P network.</param>
         public async Task JoinNetwork(IPEndPoint bootstrapNode)
         {
             // find successor and predecessor
-
+            // TODO: implement logic
+            throw new NotImplementedException();
 
             // start listening to incoming messages
             _serverListenerCancel = new CancellationTokenSource();
@@ -162,23 +162,22 @@ namespace Chord.Lib
         }
 
         /// <summary>
-        /// 
+        /// Leave the P2P network gracefully.
         /// </summary>
         public async Task LeaveNetwork()
         {
-            // reject all new incoming messages
-            _serverListenerCancel.
+            // reject all new incoming messages (graceful server endpoint shutdown)
+            await Task.Run(() => _serverListenerCancel.Cancel());
 
-            // finish all running tasks
-
-
-            // stop listening to incoming messages
-            _listenIncomingMessages.Dispose();
+            // copy managed data to successor
+            // TODO: implement logic
+            throw new NotImplementedException();
         }
 
         private void handleIncomingMessage(IChordMessage message)
         {
-
+            // TODO: implement logic
+            throw new NotImplementedException();
         }
 
         #endregion Methods
