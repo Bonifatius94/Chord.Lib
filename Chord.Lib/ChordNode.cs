@@ -134,7 +134,8 @@ namespace Chord.Lib
             {
                 // send a lookup request via network
                 var bestFinger = findBestFinger(key);
-                var response = await _client.FindSuccessor(Local, bestFinger, key);
+                var request = new ChordMessage(Local, key);
+                var response = await _client.ExecuteWithResponse(Local.Endpoint, bestFinger.Endpoint, request);
                 managingRemote = new ChordEndpoint(response.ManagingNodeEndpoint);
             }
 
@@ -163,7 +164,8 @@ namespace Chord.Lib
                 if (new BigInteger(Local.Endpoint.Address.GetAddressBytes()) == new BigInteger(node.Endpoint.Address.GetAddressBytes())) { continue; }
 
                 // run lookup and 3 sec timeout task
-                var lookupTask = _client.FindSuccessor(Local, node, Local.NodeId);
+                var lookupRequest = new ChordMessage(Local, Local.NodeId);
+                var lookupTask = _client.ExecuteWithResponse(Local.Endpoint, node.Endpoint, lookupRequest);
                 var timeoutTask = Task.Delay(3000);
 
                 // only terminate if the lookup task finishes before the timeout task
@@ -183,6 +185,7 @@ namespace Chord.Lib
         /// <param name="bootstrapNode">The bootstrap node used for joining the P2P network.</param>
         public async Task JoinNetwork(ChordEndpoint bootstrapNode)
         {
+            // TODO: synchronize join / leave operations with mutex
             HealthState = ChordHealthState.Joining;
 
             // start listening to incoming messages, so incoming join requests can be answered (background task)
@@ -191,10 +194,12 @@ namespace Chord.Lib
             _server.ListenMessages(Local, handleIncomingMessage, _serverListenerCancel.Token);
 
             // 1) find successor
-            var successor = (await _client.FindSuccessor(Local, bootstrapNode, Local.NodeId)).ManagingRemote;
+            var lookupRequest = new ChordMessage(Local, Local.NodeId);
+            var successor = (await _client.ExecuteWithResponse(Local.Endpoint, bootstrapNode.Endpoint, lookupRequest)).ManagingRemote;
 
             // 2) send join request to successor and get info on predecessor
-            var joinMetadata = await _client.JoinNetwork(Local, successor);
+            var joinSuccessorRequest = new ChordMessage(Local, JoinType.JoinSuccessor);
+            var joinMetadata = await _client.ExecuteWithResponse(Local.Endpoint, successor.Endpoint, joinSuccessorRequest);
 
             // 3) send join request to predecessor and finalize join procedure
 
@@ -208,7 +213,8 @@ namespace Chord.Lib
             // join the network normally (more than just 2 nodes)
             else
             {
-                await _client.JoinNetwork(Local, joinMetadata.PredecessorRemote);
+                var joinPredecessorRequest = new ChordMessage(Local, JoinType.JoinPredecessor);
+                _client.ExecuteNoResponse(Local.Endpoint, joinMetadata.PredecessorEndpoint, joinPredecessorRequest);
             }
 
             HealthState = ChordHealthState.Stabilize;
@@ -251,31 +257,16 @@ namespace Chord.Lib
             if (Successor.NodeId > message.LookupKeyNumeric)
             {
                 // send response to the requesting node
-                using (var client = new UdpClient(Local.Endpoint))
-                {
-                    // create response message
-                    // on initiation (successor = null): return the local endpoint as fallback
-                    var response = new ChordMessage(message, Successor ?? Local);
-                    var datagram = ChordMessageFactory.GetAsBinary(response);
-
-                    // send the response async (no reply)
-                    client.Connect(message.RequesterEndpoint);
-                    await client.SendAsync(datagram, datagram.Length);
-                }
+                // on initiation (successor = null): return the local endpoint as fallback
+                var response = new ChordMessage(message, Successor ?? Local);
+                _client.ExecuteNoResponse(Local.Endpoint, message.RequesterEndpoint, response);
             }
             // foreward the lookup request
             else
             {
-                // find the closest finger
+                // foreward the request to the closest predeceding finger (that is alive)
                 var bestFinger = findBestFinger(message.LookupKeyNumeric);
-
-                // foreward the lookup request to the finger
-                using (var client = new UdpClient(Local.Endpoint))
-                {
-                    var datagram = ChordMessageFactory.GetAsBinary(message);
-                    client.Connect(bestFinger.Endpoint);
-                    await client.SendAsync(datagram, datagram.Length);
-                }
+                _client.ExecuteNoResponse(Local.Endpoint, bestFinger.Endpoint, message);
             }
         }
 
@@ -283,28 +274,59 @@ namespace Chord.Lib
         {
             // TODO: synchronize join / leave operations with mutex
 
-            // send response to the requesting node
-            using (var client = new UdpClient(Local.Endpoint))
+            // handle successor join
+            if (message.JoinType == JoinType.JoinSuccessor)
             {
                 // create response message
-                // on initiation (successor = null): return the local endpoint as fallback
+                // on initiation: return the local endpoint as fallback (initial 2-node network join)
                 var response = new ChordMessage(message, Predecessor ?? message.RequesterRemote, FingerList);
-                var datagram = ChordMessageFactory.GetAsBinary(response);
+                _client.ExecuteNoResponse(Local.Endpoint, message.RequesterEndpoint, response);
 
-                // send the response async (no reply)
-                client.Connect(message.RequesterEndpoint);
-                await client.SendAsync(datagram, datagram.Length);
+                // update predecessor
+                Predecessor = message.RequesterRemote;
+
+                // update successor (if joining node is the first one joining)
+                if (Successor == null) { Successors.Add(message.RequesterRemote); }
             }
+            // handle predecessor join
+            else
+            {
+                // append the new successor to successor list
+                Successors.Insert(0, message.RequesterRemote);
+
+                // TODO: Think of the process. Are there other things to be done additionally?
+            }
+
+            // node needs to stabilize
+            HealthState = ChordHealthState.Stabilize;
+
+            // TODO: wait for live-checks of successor / predecessor (async)
         }
 
         private async Task handleLiveCheck(ChordMessage message)
         {
             // handle network join finalization
             if (message.RequesterRemote.NodeId.Equals(Predecessor.NodeId) && message.FinalizeJoin) { HealthState = ChordHealthState.Idle; }
+
+            // handle requested stabilization procedure
+            if (message.Stabilize)
+            {
+                // node needs to stabilize
+                HealthState = ChordHealthState.Stabilize;
+
+                // TODO: send live-checks with piggy-back infos and await responses
+            }
         }
 
+        /// <summary>
+        /// Find the closest reachable predecessor of the requested key.
+        /// </summary>
+        /// <param name="key">The key to be looked up.</param>
+        /// <returns>the best endpoint to foreward the key lookup request to.</returns>
         private ChordEndpoint findBestFinger(BigInteger key)
         {
+            // TODO: take live-checks in consideration to minimize the risk of running into a timeout
+
             // select best finger (closest predecessor of the lookup key)
             var bestFinger = Local.NodeId < key
                 ? FingerList.Where(x => x.NodeId < key).OrderByDescending(x => x.NodeId).FirstOrDefault()

@@ -53,12 +53,13 @@ namespace Chord.Lib.Message
         /// Create a new chord join request message with the given local endpoint (to be joined).
         /// </summary>
         /// <param name="sender">The sender requesting the join.</param>
-        public ChordMessage(ChordEndpoint sender)
+        public ChordMessage(ChordEndpoint sender, JoinType joinType)
         {
             Version = "1.0";
             Type = ChordMessageType.JoinRequest;
             RequestId = _random.Next().ToString();
             Requester = sender.Endpoint.ToString();
+            JoinType = joinType;
         }
 
         /// <summary>
@@ -81,14 +82,16 @@ namespace Chord.Lib.Message
         /// Create a new chord live-check message with the given sender and piggy-back join finalization.
         /// </summary>
         /// <param name="sender">The sender requesting the successor / predecessor update.</param>
-        /// <param name="finalizeJoin">Indicates whether the .</param>
-        public ChordMessage(ChordEndpoint sender, bool finalizeJoin)
+        /// <param name="finalizeJoin">Indicates whether the join was successful.</param>
+        /// <param name="finalizeJoin">Indicates whether the network needs to stabilize.</param>
+        public ChordMessage(ChordEndpoint sender, bool finalizeJoin, bool stabilize = false)
         {
             Version = "1.0";
             Type = ChordMessageType.LiveCheck;
             RequestId = _random.Next().ToString();
             Requester = sender.Endpoint.ToString();
             FinalizeJoin = finalizeJoin;
+            Stabilize = stabilize;
 
             // TODO: think of more useful piggy-back attributes
         }
@@ -157,13 +160,19 @@ namespace Chord.Lib.Message
         /// The predecessor node to be sent a join request as IP endpoint.
         /// </summary>
         [JsonIgnore]
-        public IPEndPoint PredecessorNodeEndpoint => IPEndPoint.Parse(PredecessorNode);
+        public IPEndPoint PredecessorEndpoint => IPEndPoint.Parse(PredecessorNode);
 
         /// <summary>
         /// The predecessor node to be sent a join request as chord endpoint.
         /// </summary>
         [JsonIgnore]
-        public ChordEndpoint PredecessorRemote => new ChordEndpoint(PredecessorNodeEndpoint);
+        public ChordEndpoint PredecessorRemote => new ChordEndpoint(PredecessorEndpoint);
+
+        /// <summary>
+        /// Indicates whether the addressed node should be the new predecessor or successor.
+        /// </summary>
+        [JsonProperty]
+        public JoinType JoinType { get; set; }
 
         #endregion JoinSuccessor
 
@@ -201,7 +210,7 @@ namespace Chord.Lib.Message
 
         #endregion KeyLookup
 
-        #region Notification
+        #region LiveCheck
 
         /// <summary>
         /// Piggy-back information whether the pending join was successful.
@@ -209,7 +218,13 @@ namespace Chord.Lib.Message
         [JsonProperty]
         public bool FinalizeJoin { get; set; } = false;
 
-        #endregion Notification
+        /// <summary>
+        /// Piggy-back information whether the node should perform the stabilization mechanism.
+        /// </summary>
+        [JsonProperty]
+        public bool Stabilize { get; set; } = false;
+
+        #endregion LiveCheck
 
         #endregion Members
     }
@@ -221,5 +236,11 @@ namespace Chord.Lib.Message
         KeyLookupRequest,
         KeyLookupResponse,
         LiveCheck
+    }
+
+    public enum JoinType
+    {
+        JoinSuccessor,
+        JoinPredecessor
     }
 }

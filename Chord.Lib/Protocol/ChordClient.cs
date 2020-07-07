@@ -16,36 +16,38 @@ namespace Chord.Lib.Protocol
         #region Methods
 
         /// <summary>
-        /// Perform a UDP request that finds the node managing the given chord hash, starting at the given bootstrap chord peer.
+        /// Send a UDP message without waiting for a response.
         /// </summary>
-        /// <param name="local">The local IP endpoint settings.</param>
-        /// <param name="bootstrap">The IP endpoint settings of the remote peer where the initial request is sent to.</param>
-        /// <param name="key">The key to look up.</param>
-        /// <returns>an awaitable chord response message.</returns>
-        public async Task<ChordMessage> FindSuccessor(ChordEndpoint local, ChordEndpoint bootstrap, BigInteger key)
+        /// <param name="local">The local endpoint sending the request.</param>
+        /// <param name="remote">The remote endpoint receiving the request.</param>
+        /// <param name="message">The message to be sent.</param>
+        public void ExecuteNoResponse(IPEndPoint local, IPEndPoint remote, ChordMessage message)
         {
-            var request = new ChordMessage(local, key);
-            return await executeRequest(local.Endpoint, bootstrap.Endpoint, request);
+            // create request message
+            var datagram = ChordMessageFactory.GetAsBinary(message);
+
+            // open udp client for sending / receiving messages
+            using (var client = new UdpClient(local))
+            {
+                // send the request
+                client.Connect(remote);
+                client.Send(datagram, datagram.Length);
+            }
         }
 
         /// <summary>
-        /// Perform a UDP request for joining the chord network.
+        /// Send a UDP message, wait for a response asynchronously and return the response.
         /// </summary>
-        /// <param name="local">The local IP endpoint settings.</param>
-        /// <param name="successorOrPredecessor">The IP endpoint settings of the successor or predecessor to be joined.</param>
-        /// <returns>an awaitable chord response message.</returns>
-        public async Task<ChordMessage> JoinNetwork(ChordEndpoint local, ChordEndpoint successorOrPredecessor)
-        {
-            var request = new ChordMessage(local);
-            return await executeRequest(local.Endpoint, successorOrPredecessor.Endpoint, request);
-        }
-
-        private async Task<ChordMessage> executeRequest(IPEndPoint local, IPEndPoint remote, ChordMessage request)
+        /// <param name="local">The local endpoint sending the request.</param>
+        /// <param name="remote">The remote endpoint receiving the request.</param>
+        /// <param name="message">The message to be sent.</param>
+        /// <returns>the response message to the given request</returns>
+        public async Task<ChordMessage> ExecuteWithResponse(IPEndPoint local, IPEndPoint remote, ChordMessage message)
         {
             ChordMessage response = null;
 
             // create request message
-            var datagram = ChordMessageFactory.GetAsBinary(request);
+            var datagram = ChordMessageFactory.GetAsBinary(message);
 
             // open udp client for sending / receiving messages
             using (var client = new UdpClient(local))
@@ -69,7 +71,7 @@ namespace Chord.Lib.Protocol
                     response = ChordMessageFactory.FromBinary(result.Buffer);
                 }
                 // make sure that the response matches the request id
-                while (!(response.LookupKey.Equals(request.LookupKey) && response.RequestId.Equals(request.RequestId)));
+                while (!(response.LookupKey.Equals(message.LookupKey) && response.RequestId.Equals(message.RequestId)));
             }
 
             return response;

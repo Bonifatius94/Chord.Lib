@@ -38,8 +38,32 @@ namespace Chord.Lib
         /// </summary>
         public IPEndPoint Endpoint { get; private set; }
 
-        // TODO: add endpoint state enum property indicating the connection health
+        /// <summary>
+        /// The remote node's assumed health state.
+        /// </summary>
+        public EndpointState State { get; set; } = EndpointState.Live;
 
         #endregion Members
+    }
+
+    /// <summary>
+    /// An enumeration modeling health states of remote nodes.
+    /// </summary>
+    public enum EndpointState
+    {
+        /// <summary>
+        /// The remote endpoint is assumed to be up and well functioning.
+        /// </summary>
+        Live,
+
+        /// <summary>
+        /// It is unclear whether the remote node is still up. The live-check timeout is awaited to be sure.
+        /// </summary>
+        Questioning,
+
+        /// <summary>
+        /// The remote endpoint is assumed to be dead. Connection is lost.
+        /// </summary>
+        Dead,
     }
 }
