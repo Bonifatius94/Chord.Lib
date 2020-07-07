@@ -34,7 +34,8 @@ namespace Chord.Daemon
                 // initialize a new chord node
                 var node = new ChordNode(localEndpoint, logger);
                 node.FindBootstrapNode(IpSettingsHelper.GetIpv4NetworkId(), IpSettingsHelper.GetIpv4Broadcast())
-                    .ContinueWith(bootstrapNode => node.JoinNetwork(bootstrapNode.Result)).Wait();
+                    .ContinueWith(bootstrapNode => node.JoinNetwork(bootstrapNode.Result))
+                    .Wait();
 
                 // attach to process exit event for a graceful shutdown
                 AppDomain.CurrentDomain.ProcessExit += (object sender, EventArgs e) =>

@@ -16,31 +16,48 @@ namespace Chord.Lib.Protocol
         #region Methods
 
         /// <summary>
-        /// Perform a UDP request that looks up the given chord hash, starting at the given bootstrap chord peer.
+        /// Perform a UDP request that finds the node managing the given chord hash, starting at the given bootstrap chord peer.
         /// </summary>
         /// <param name="local">The local IP endpoint settings.</param>
         /// <param name="bootstrap">The IP endpoint settings of the remote peer where the initial request is sent to.</param>
         /// <param name="key">The key to look up.</param>
-        /// <returns>an awaitable result of the key's managing node identifier.</returns>
-        public async Task<BigInteger> LookupKey(IPEndPoint local, IPEndPoint bootstrap, BigInteger key)
+        /// <returns>an awaitable chord response message.</returns>
+        public async Task<ChordMessage> FindSuccessor(ChordEndpoint local, ChordEndpoint bootstrap, BigInteger key)
         {
-            BigInteger nodeId;
+            var request = new ChordMessage(local, key);
+            return await executeRequest(local.Endpoint, bootstrap.Endpoint, request);
+        }
+
+        /// <summary>
+        /// Perform a UDP request for joining the chord network.
+        /// </summary>
+        /// <param name="local">The local IP endpoint settings.</param>
+        /// <param name="successorOrPredecessor">The IP endpoint settings of the successor or predecessor to be joined.</param>
+        /// <returns>an awaitable chord response message.</returns>
+        public async Task<ChordMessage> JoinNetwork(ChordEndpoint local, ChordEndpoint successorOrPredecessor)
+        {
+            var request = new ChordMessage(local);
+            return await executeRequest(local.Endpoint, successorOrPredecessor.Endpoint, request);
+        }
+
+        private async Task<ChordMessage> executeRequest(IPEndPoint local, IPEndPoint remote, ChordMessage request)
+        {
+            ChordMessage response = null;
 
             // create request message
-            var request = new ChordKeyLookupJsonRequestMessage(local, key);
-            var datagram = request.GetAsBinary();
+            var datagram = ChordMessageFactory.GetAsBinary(request);
 
             // open udp client for sending / receiving messages
             using (var client = new UdpClient(local))
             {
                 // send the request
-                client.Connect(bootstrap);
+                client.Connect(remote);
                 await client.SendAsync(datagram, datagram.Length);
 
-                // TODO: check if using one udp client works for different request / response remotes (should work because client.Bind() was not executed after connecting)
+                // TODO: check if using one udp client works for different request / response remotes 
+                // (should work because client.Bind() was not executed after connecting)
 
                 UdpReceiveResult result;
-                ChordKeyLookupJsonResponseMessage response;
 
                 // wait for the response
                 do
@@ -49,17 +66,13 @@ namespace Chord.Lib.Protocol
                     result = await client.ReceiveAsync();
 
                     // parse the response content
-                    string json = Encoding.UTF8.GetString(result.Buffer);
-                    response = JsonConvert.DeserializeObject<ChordKeyLookupJsonResponseMessage>(json);
+                    response = ChordMessageFactory.FromBinary(result.Buffer);
                 }
+                // make sure that the response matches the request id
                 while (!(response.LookupKey.Equals(request.LookupKey) && response.RequestId.Equals(request.RequestId)));
-
-                // calculate managing node from response endpoint
-                var hash = HashingHelper.GetSha1Hash(result.RemoteEndPoint);
-                nodeId = new BigInteger(hash);
             }
 
-            return nodeId;
+            return response;
         }
 
         #endregion Methods

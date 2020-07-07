@@ -24,6 +24,11 @@ namespace Chord.Config
         /// </summary>
         public const string ENV_SETTING_CHORD_PORT = "CHORD_PORT";
 
+        /// <summary>
+        /// A regular expression for validating network CIDR format.
+        /// </summary>
+        private const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
+
         #endregion Constants
 
         #region Methods
@@ -74,7 +79,6 @@ namespace Chord.Config
             if (string.IsNullOrEmpty(networkCidr)) { throw new IOException("Network CIDR environment variable is not specified! Cannot continue without it!"); }
 
             // make sure that the network CIDR mask is valid
-            const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
             if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
 
             // split CIDR network mask at '/' separator
@@ -99,7 +103,6 @@ namespace Chord.Config
             if (string.IsNullOrEmpty(networkCidr)) { throw new IOException("Network CIDR environment variable is not specified! Cannot continue without it!"); }
 
             // make sure that the network CIDR mask is valid
-            const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
             if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
 
             // split CIDR network mask at '/' separator
@@ -131,7 +134,6 @@ namespace Chord.Config
             // TODO: check if the regex works
 
             // make sure that the mask is valid
-            const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
             if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
 
             // split CIDR network mask at '/' separator

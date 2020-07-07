@@ -24,7 +24,7 @@ namespace Chord.Lib.Protocol
         /// <param name="handler">The message handler delegate.</param>
         /// <param name="token">The cancellation to exit gracefully.</param>
         /// <returns>a task handle</returns>
-        public async Task ListenMessages(IPEndPoint local, Action<IChordMessage> handler, CancellationToken token)
+        public async Task ListenMessages(ChordEndpoint local, Func<ChordMessage, Task> handler, CancellationToken token)
         {
             var tasks = new List<Task>();
 
@@ -34,16 +34,18 @@ namespace Chord.Lib.Protocol
                 token.ThrowIfCancellationRequested();
 
                 // create udp client sniffing on local chord IP endpoint
-                using (var client = new UdpClient(local))
+                using (var client = new UdpClient(local.Endpoint))
                 {
                     // loop endless (until the task gets cancelled)
                     while (true)
                     {
+                        // TODO: use synchronized message queue to ensure that no message gets dropped accidentially
+
                         // listen to message async
                         var result = await client.ReceiveAsync();
 
                         // parse the message
-                        var message = ChordMessageFactory.DeserializeMessage(result.Buffer);
+                        var message = ChordMessageFactory.FromBinary(result.Buffer);
 
                         // invoke the event handler
                         var task = new Task(() => handler.Invoke(message));
@@ -60,6 +62,8 @@ namespace Chord.Lib.Protocol
                             // quit the task gracefully
                             token.ThrowIfCancellationRequested();
                         }
+
+                        // TODO: test if cancellation works properly
                     }
                 }
             }

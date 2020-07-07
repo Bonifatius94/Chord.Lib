@@ -13,51 +13,27 @@ namespace Chord.Lib.Message
         #region Methods
 
         /// <summary>
-        /// Deserialize a new json message from the given UTF-8 binary content.
+        /// Serialize the given chord message as binary data.
         /// </summary>
-        /// <param name="content">The UTF-8 content to parse.</param>
-        /// <returns>a chord message</returns>
-        public static IChordMessage DeserializeMessage(byte[] content)
+        /// <param name="message">The chord message to be serialized.</param>
+        /// <returns>json content as byte array</returns>
+        public static byte[] GetAsBinary(ChordMessage message)
         {
-            // convert UTF-8 content to json string
-            string json = Encoding.UTF8.GetString(content);
+            string json = JsonConvert.SerializeObject(message);
+            return Encoding.UTF8.GetBytes(json);
+        }
 
-            // only parse the base parameters of the json string for switching
-            var baseMessage = JsonConvert.DeserializeObject<ChordJsonBaseMessage>(json);
-
-            // initialize the exact message type
-            switch (baseMessage.Type)
-            {
-                case ChordMessageType.KeyLookupRequest: return JsonConvert.DeserializeObject<ChordKeyLookupJsonRequestMessage>(json);
-                case ChordMessageType.KeyLookupResponse: return JsonConvert.DeserializeObject<ChordKeyLookupJsonResponseMessage>(json);
-                case ChordMessageType.Notification: return JsonConvert.DeserializeObject<ChordNotificationMessage>(json);
-                default: throw new ArgumentException($"Unknown content detected! Cannot parse message content '{ json }'!");
-            }
+        /// <summary>
+        /// Deserialize a chord message from the given binary data.
+        /// </summary>
+        /// <param name="data">The binary data chord message content to be deserialized.</param>
+        /// <returns>a chord message instance</returns>
+        public static ChordMessage FromBinary(byte[] data)
+        {
+            string json = Encoding.UTF8.GetString(data);
+            return JsonConvert.DeserializeObject<ChordMessage>(json);
         }
 
         #endregion Methods
-    }
-
-    /// <summary>
-    /// A proprietary chord message format for retrieving message base data using json format.
-    /// </summary>
-    [JsonObject]
-    class ChordJsonBaseMessage
-    {
-        #region Members
-
-        /// <summary>
-        /// The chord message protocol version.
-        /// </summary>
-        [JsonProperty]
-        public string Version { get; set; }
-
-        /// <summary>
-        /// The chord message type.
-        /// </summary>
-        [JsonProperty]
-        public ChordMessageType Type { get; set; }
-
-        #endregion Members
     }
 }
