@@ -38,6 +38,8 @@ namespace Chord.Lib
         /// </summary>
         public IPEndPoint Endpoint { get; private set; }
 
+        // TODO: add endpoint state enum property indicating the connection health
+
         #endregion Members
     }
 }

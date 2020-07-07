@@ -93,6 +93,8 @@ namespace Chord.Lib.Message
             // TODO: think of more useful piggy-back attributes
         }
 
+        // TODO: implement stabilization message requesting a token ring update
+
         #endregion Constructor
 
         #region Members

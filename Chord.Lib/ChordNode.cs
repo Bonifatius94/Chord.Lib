@@ -147,7 +147,7 @@ namespace Chord.Lib
         /// <param name="networkId">The network id.</param>
         /// <param name="broadcast">The network broadcast.</param>
         /// <returns>an endpoint that can be used for bootstrapping</returns>
-        public async Task<IPEndPoint> FindBootstrapNode(IPAddress networkId, IPAddress broadcast)
+        public async Task<ChordEndpoint> FindBootstrapNode(IPAddress networkId, IPAddress broadcast)
         {
             // init min / max address for brute-force search range
             int min = BitConverter.ToInt32(networkId.GetAddressBytes(), 0) + 1;
@@ -167,7 +167,7 @@ namespace Chord.Lib
                 var timeoutTask = Task.Delay(3000);
 
                 // only terminate if the lookup task finishes before the timeout task
-                if (await Task.WhenAny(lookupTask, timeoutTask) == lookupTask) { return lookupTask.Result.ManagingNodeEndpoint; }
+                if (await Task.WhenAny(lookupTask, timeoutTask) == lookupTask) { return lookupTask.Result.ManagingRemote; }
                 else { lookupTask.Dispose(); }
 
                 // TODO: implement greedy lookup trying multiple IP addresses at once
@@ -183,6 +183,8 @@ namespace Chord.Lib
         /// <param name="bootstrapNode">The bootstrap node used for joining the P2P network.</param>
         public async Task JoinNetwork(ChordEndpoint bootstrapNode)
         {
+            HealthState = ChordHealthState.Joining;
+
             // start listening to incoming messages, so incoming join requests can be answered (background task)
             // listening needs to start first because otherwise the P2P network would run into a deadlock
             _serverListenerCancel = new CancellationTokenSource();
@@ -195,17 +197,23 @@ namespace Chord.Lib
             var joinMetadata = await _client.JoinNetwork(Local, successor);
 
             // 3) send join request to predecessor and finalize join procedure
+
             // check if the node is the first to join the network
             if (successor.NodeId.Equals(joinMetadata.PredecessorRemote.NodeId))
             {
-
+                // assign successor and predecessor (network with 2 nodes)
+                Successors.Add(successor);
+                Predecessor = successor;
             }
-            // join the network normally
+            // join the network normally (more than just 2 nodes)
             else
             {
-                var joinMetadata2 = await _client.JoinNetwork(Local, joinMetadata.PredecessorRemote);
-
+                await _client.JoinNetwork(Local, joinMetadata.PredecessorRemote);
             }
+
+            HealthState = ChordHealthState.Stabilize;
+
+            // 4) wait for live-checks of successor / predecessor
 
             // try to find more than just one successor, e.g. at least 3 successors (background task)
 
@@ -231,13 +239,9 @@ namespace Chord.Lib
             switch (message.Type)
             {
                 case ChordMessageType.KeyLookupRequest: await handleLookupRequest(message); break;
-                case ChordMessageType.JoinRequest:
-
-                    break;
-                case ChordMessageType.LiveCheck:
-
-                    break;
-                default: throw new NotSupportedException($"Unsupported chord request message of type '{ message.Type }' detected!");
+                case ChordMessageType.JoinRequest: await handleJoinRequest(message); break;
+                case ChordMessageType.LiveCheck: await handleLiveCheck(message); break;
+                // TODO: add leave request
             }
         }
 
@@ -277,7 +281,7 @@ namespace Chord.Lib
 
         private async Task handleJoinRequest(ChordMessage message)
         {
-            var requestingNode = message.RequesterRemote;
+            // TODO: synchronize join / leave operations with mutex
 
             // send response to the requesting node
             using (var client = new UdpClient(Local.Endpoint))
@@ -291,6 +295,12 @@ namespace Chord.Lib
                 client.Connect(message.RequesterEndpoint);
                 await client.SendAsync(datagram, datagram.Length);
             }
+        }
+
+        private async Task handleLiveCheck(ChordMessage message)
+        {
+            // handle network join finalization
+            if (message.RequesterRemote.NodeId.Equals(Predecessor.NodeId) && message.FinalizeJoin) { HealthState = ChordHealthState.Idle; }
         }
 
         private ChordEndpoint findBestFinger(BigInteger key)

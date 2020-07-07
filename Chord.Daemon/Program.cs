@@ -67,7 +67,7 @@ namespace Chord.Daemon
                             .ContinueWith(key => 
                                 logger.LogInformation(
                                     $"Lookup: key '{ HexStringSerializer.Deserialize(bytes) }' " +
-                                    $"is managed by node with id '{ HexStringSerializer.Deserialize(key.Result.ToByteArray()) }'"))
+                                    $"is managed by node with id '{ HexStringSerializer.Deserialize(key.Result.NodeId.ToByteArray()) }'"))
                             .Wait();
 
                         // sleep for 1 sec
