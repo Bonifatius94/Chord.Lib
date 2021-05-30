@@ -71,7 +71,8 @@ namespace Chord.Lib.Protocol
                     response = ChordMessageFactory.FromBinary(result.Buffer);
                 }
                 // make sure that the response matches the request id
-                while (!(response.LookupKey.Equals(message.LookupKey) && response.RequestId.Equals(message.RequestId)));
+                while (!(response.LookupKey.Equals(message.LookupKey)
+                    && response.RequestId.Equals(message.RequestId)));
             }
 
             return response;
