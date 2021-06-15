@@ -27,15 +27,16 @@ When querying a data item, any node can serve as an entrypoint into the Chord cl
 such that it forwards the request clockwise until the first node with a higher id than
 the queried data item's id is reached. The node responsible for the data item is found.
 
-As the search performance in such a simple token-ring topology would be O(n) time for n nodes,
-there has to be some kind of key lookup enhancement. Therefore each node additionally
-manages a collection of O(log(n)) nodes with exponentially growing distances up to the
-node roughly situated at the opposing side of the token-ring; those nodes are often referred
-to as finger pointers or simply fingers being stored in a finger table. When forwarding to
-the maximum connected node that is lower than the searched id, the distance is always roughly
+As a lookup in such a simple token-ring topology would require O(n) time for n nodes, there
+has to be some kind of key lookup enhancement. Therefore each node additionally manages
+a collection of O(log(n)) nodes with exponentially growing distances up to the node roughly
+situated at the opposing side of the token-ring; those nodes are often referred to as finger
+pointers or simply fingers being stored in a finger table. Now, when forwarding to the maximum
+connected node whose id is still lower than the searched id, the distance is always roughly
 halved resulting in a performance complexity of O(log(n)). Note that it's very important
-that the request must not be forwarded to a node with an id higher than the searched one
-as this may cause infinite loops.
+not to forward requests to nodes with an id higher than the searched one as this may cause
+infinite loops (the only exception is when an id is looked up that is smaller than the
+node's id resulting into an id overflow).
 
 ## Chord Library Functions
 The Chord Library exposes following elementary functions:
