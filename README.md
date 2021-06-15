@@ -19,8 +19,9 @@ Now that it's clear how the Chord cluster looks like, let's have a look at the w
 organize the data to be stored. It's actually quite simple: Each node in the token-ring
 and each data item is assigned a unique id that can be referred to as a lookup key.
 By convention, each data item is managed by the node with the next higher id than the 
-data item's id. And not to mention the nodes obviously should know their neighbour's id
-like it naturally should be in a token-ring.
+data item's id, so the data items get uniformly distributed over the token-ring's id range.
+And not to mention the nodes obviously should know each of their neighbour's id like it
+naturally should be in a token-ring.
 
 When querying a data item, any node can serve as an entrypoint into the Chord cluster
 such that it forwards the request clockwise until the first node with a higher id than
