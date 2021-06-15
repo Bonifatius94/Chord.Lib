@@ -7,7 +7,7 @@ namespace Chord.Lib
     /// <summary>
     /// A helper class for conversions between hex strings and byte arrays.
     /// </summary>
-    public static class HexStringSerializer
+    public static class HexString
     {
         #region Methods
 

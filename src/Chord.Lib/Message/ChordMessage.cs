@@ -31,7 +31,7 @@ namespace Chord.Lib.Message
             Type = ChordMessageType.KeyLookupRequest;
             RequestId = _random.Next().ToString();
             Requester = sender.Endpoint.ToString();
-            LookupKey = HexStringSerializer.Deserialize(lookupKey.ToByteArray());
+            LookupKey = HexString.Deserialize(lookupKey.ToByteArray());
         }
 
         /// <summary>
