@@ -23,7 +23,7 @@ namespace Chord.Lib.Core
     public interface IChordRemoteNode
     {
         // summary of remote node features
-        string NodeId { get; set; }
+        long NodeId { get; set; }
         string IpAddress { get; set; }
         string Port { get; set; }
     }
@@ -32,7 +32,7 @@ namespace Chord.Lib.Core
     {
         // core message features
         ChordRequestType Type { get; set; }
-        string RequesterId { get; set; }
+        long RequesterId { get; set; }
         string RequestedResourceId { get; set; }
 
         // TODO: make sure those features suffice
@@ -41,13 +41,35 @@ namespace Chord.Lib.Core
     public interface IChordResponseMessage
     {
         // core message features
-        ChordRequestType Type { get; set; }
-        string RequesterId { get; set; }
-        string RequestedResourceId { get; set; }
-        string ResponderId { get; set; }
+        IChordRemoteNode Responder { get; set; }
 
         // additional message features for the join procedure
-        string PredecessorId { get; set; }
+        IChordRemoteNode Predecessor { get; set; }
         IEnumerable<IChordRemoteNode> FingerTable { get; set; }
+    }
+
+    public class ChordRemoteNode
+    {
+        // summary of remote node features
+        public long NodeId { get; set; }
+        public string IpAddress { get; set; }
+        public string Port { get; set; }
+    }
+
+    public class ChordRequestMessage : IChordRequestMessage
+    {
+        public ChordRequestType Type { get; set; }
+        public long RequesterId { get; set; }
+        public string RequestedResourceId { get; set; }
+    }
+
+    public class ChordResponseMessage : IChordResponseMessage
+    {
+        // core message features
+        public IChordRemoteNode Responder { get; set; }
+
+        // additional message features for the join procedure
+        public IChordRemoteNode Predecessor { get; set; }
+        public IEnumerable<IChordRemoteNode> FingerTable { get; set; }
     }
 }
