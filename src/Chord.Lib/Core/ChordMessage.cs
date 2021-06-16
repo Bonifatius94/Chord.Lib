@@ -33,7 +33,7 @@ namespace Chord.Lib.Core
         // core message features
         ChordRequestType Type { get; set; }
         long RequesterId { get; set; }
-        string RequestedResourceId { get; set; }
+        long RequestedResourceId { get; set; }
 
         // TODO: make sure those features suffice
     }
@@ -60,7 +60,7 @@ namespace Chord.Lib.Core
     {
         public ChordRequestType Type { get; set; }
         public long RequesterId { get; set; }
-        public string RequestedResourceId { get; set; }
+        public long RequestedResourceId { get; set; }
     }
 
     public class ChordResponseMessage : IChordResponseMessage
