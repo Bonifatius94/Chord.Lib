@@ -38,7 +38,7 @@ not to forward requests to nodes with an id higher than the searched one as this
 infinite loops (the only exception is when an id is looked up that is smaller than the
 node's id resulting into an id overflow).
 
-## Chord Library Functions
+## The Core Functionality
 The Chord Library exposes following elementary functions:
 
 ### 1) Key Lookup
@@ -63,12 +63,20 @@ Monitor the health status of all nodes connected by the finger table on a regula
 time schedule. Initiate repair operations for nodes having a downtime (e.g. bridge the node
 and recover the data from successor nodes that oftentimes share data with their direct neighbours).
 
-## Chord Endpoint
-The Chord library can be used by web services to establish a Chord peer-to-peer (P2P) network.
-It exposes all Chord tasks asynchronously facilityting high-performance parallel operations.
+### 5) Serve Payload Functionality
+The actual functionality of the service should be organized such that each node can serve
+any request. In case the node cannot access the data required to perform the task itself, it may
+either forward to the responsible node which can be either achieved by telling the requester
+which node to call instead or actually handing the results through (piggyback). Both policies
+may be supported by the Chord.Lib and should rely onto the payload service architecture.
 
-For testing purposes there is also a very simple key-value store service using the Chord library.
-Those dockerized service nodes can be deployed as a kubernetes load-balanced service.
+## Components and Deployment
+The Chord.Lib package can be used by web services to establish a Chord peer-to-peer (P2P) network.
+Therefore it exposes all of Chord's core functionality asynchronously, facilityting 
+high-performance parallel operations.
+
+For testing purposes there is a very simple key-value store service using the Chord library.
+Those dockerized service nodes can be deployed e.g. as a kubernetes load-balanced service.
 
 ## Disclaimer
 There is still WIP, so be cautious when using this code as it might not work properly yet.
