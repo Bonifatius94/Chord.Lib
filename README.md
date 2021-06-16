@@ -68,7 +68,7 @@ The actual functionality of the service should be organized such that each node 
 any request. In case the node cannot access the data required to perform the task itself, it may
 either forward to the responsible node. This can be either achieved by telling the requester
 which node to call instead or actually handing the results through (piggyback). Both policies
-may be supported by the Chord.Lib and should rely onto the payload service architecture.
+may be supported by the Chord.Lib and should rely onto the payload service design.
 
 ## Components and Deployment
 The Chord.Lib package can be used by web services to establish a Chord peer-to-peer (P2P) network.
