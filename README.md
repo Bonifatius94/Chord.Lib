@@ -35,37 +35,39 @@ a collection of O(log(n)) nodes with exponentially growing distances up to the n
 situated at the opposing side of the token-ring; those nodes are often referred to as finger
 pointers or simply fingers being stored in a finger table.
 
-Now, when forwarding to the maximum
-connected node whose id is still lower than the searched id, the distance is always roughly
+Now, when forwarding to the maximum neighbour or finger
+whose id is still smaller than the searched id, the distance is always roughly
 halved resulting in a performance complexity of O(log(n)). Note that it's very important
 not to forward requests to nodes with an id higher than the searched one as this may cause
 infinite loops (the only exception is when an id is looked up that is smaller than the
-node's id resulting into an id overflow).
+node's id resulting into an id range overflow).
 
 ## The Core Functionality
 The Chord Library exposes following elementary functions:
 
-### 1) Key Lookup
+### 1) Lookup Key
 As already described, the cluster can perform key lookups starting from any node being
-forwarded to the node that's actually responsible for the looked up key.
+forwarded to the node that's actually responsible for the looked up key. This can be
+seen as some kind of routing protocol to find resources in the Chord token-ring.
 
 ### 2) Join Network
-Make a node join the P2P cluster. This can be achieved by generating a random node id
+Make a node join the Chord cluster. This can be achieved by generating a random (unique!) node id
 and performing a key lookup to find the new successor node. Then, request the new successor's
 current predecessor which becomes the predecessor of the node to be joined. Now, the
-nodes can perform a join sequence like inserting items into a linked list.
+nodes can perform a join sequence like inserting an item into a bidirectional linked list.
 Next, exchange the finger table with the new neighbours and finalize the join procedure.
 
 ### 3) Leave Network
-Allow a node to leave the P2P cluster gracefully. This can be achieved by copying the node's
+Allow a node to leave the Chord cluster gracefully. This can be achieved by copying the node's
 data to the successor node that will be responsible for the data. Then, tell the predecessor
 that it has a new successor (similar to removing an item from a linked list). Shut the node
 down gracefully after finalizing the whole process.
 
 ### 4) Check Node Health
-Monitor the health status of all nodes connected by the finger table on a regular
+Monitor the health status of all nodes connected (neighbours and fingers) on a regular
 time schedule. Initiate repair operations for nodes having a downtime (e.g. bridge the node
 and recover the data from successor nodes that oftentimes share data with their direct neighbours).
+Moreover, also update the 
 
 ### 5) Serve Payload Functionality
 The actual functionality of the service should be organized such that each node can serve
@@ -76,11 +78,21 @@ may be supported by the Chord.Lib and should rely onto the payload service desig
 
 ## Components and Deployment
 The Chord.Lib package can be used by web services to establish a Chord peer-to-peer (P2P) network.
-Therefore it exposes all of Chord's core functionality asynchronously, facilityting 
-high-performance parallel operations.
+Therefore it exposes all of Chord's core functionality asynchronously, facilitating 
+high-performance parallel operations. In particular, a Chord.Lib node needs to be given some
+callbacks enabling it to exchange messages with other nodes like key lookups or health checks, etc.
+Last, there should also be an entire ASP.NET endpoint controller class that can be easily attached
+to existing ASP.NET services to get access to the Chord routing.
+
+Those Chord functions are not only provided as a .NET package but also as an entire dockerized
+container exposing ASP.NET endpoint. This container is supposed to be paired with another
+container serving the payload functionality, i.e. each pair of those two containers can be
+seen as something like a Kubernetes pod gluing the containers together. Requesters can now
+enter the Chord cluster from any node and get forwarded to the node serving the payload.
 
 For testing purposes there is a very simple key-value store service using the Chord library.
-Those dockerized service nodes can be deployed e.g. as a kubernetes load-balanced service.
+Those dockerized service nodes can be deployed e.g. as a Kubernetes load-balanced service
+like already described in the last sections.
 
 ## Disclaimer
 There is still WIP, so be cautious when using this code as it might not work properly yet.
