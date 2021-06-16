@@ -81,10 +81,10 @@ The Chord.Lib package can be used by web services to establish a Chord peer-to-p
 Therefore it exposes all of Chord's core functionality asynchronously, facilitating 
 high-performance parallel operations. In particular, a Chord.Lib node needs to be given a
 callback enabling it to exchange messages with other nodes like key lookups or health checks, etc.
-Each of those nodes instances may also be linked to an ASP.NET endpoint controller class providing
-exactly that message submission. This should help integrating the Chord endpoint making it
-obsolete to re-develop the ASP.NET endpoint controller again and again, but also allows 
-implementing the endpoint individually when needed targeting maximum flexibility and convenience.
+Each of those node instances may also be linked to an ASP.NET endpoint controller class providing
+exactly that message submission. This approach should help integrating the Chord endpoint making it
+obsolete to re-develop the ASP.NET endpoint controller again and again, but also allowing to
+implement the endpoint individually when needed targeting maximum flexibility and convenience.
 
 Those Chord functions are not only provided as a .NET package but also as an entire dockerized
 container exposing the ASP.NET endpoint. This container can then be paired with another
