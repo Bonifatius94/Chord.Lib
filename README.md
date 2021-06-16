@@ -7,7 +7,7 @@ providing services like e.g. distributed key-value stores with self-organization
 making it more durable to system downtime etc. Most importantly there is no single-point-of-failure
 by design which might be a very desirable system feature for cloud services worth exploring.
 
-## The Chord Concept
+## Chord Fundamentals
 The Chord system organizes a distributed service as a peer-to-peer network consisting of
 multiple independently acting service instances, called nodes. Those nodes are created
 equal and serve both payload and infrastructure tasks. All nodes are organized as a virtual
@@ -15,6 +15,7 @@ token-ring topology which is commonly referred to as an overlay network. The ter
 network means that the virtual relations between nodes don't necessarily need not reflect
 the real-world network topology bound to machines, wires and other hardware devices.
 
+### Chord Nodes and Data Items
 Now that it's clear how the Chord cluster looks like, let's have a look at the way the nodes 
 organize the data to be stored. It's actually quite simple: Each node in the token-ring
 and each data item is assigned a unique id that can be referred to as a lookup key.
@@ -23,6 +24,7 @@ data item's id, so the data items get uniformly distributed over the token-ring'
 And not to mention the nodes obviously should know each of their neighbour's id like it
 naturally should be in a token-ring.
 
+### Key Lookup Query
 When querying a data item, any node can serve as an entrypoint into the Chord cluster
 such that it forwards the request clockwise until the first node with a higher id than
 the queried data item's id is reached. The node responsible for the data item is found.
