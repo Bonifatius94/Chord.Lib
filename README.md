@@ -2,18 +2,18 @@
 # Chord.Lib
 
 ## About
-This project is a little fun implementation of the Chord P2P concept as C# .NET Core library
+This project is a little fun implementation of the Chord P2P concept as C# .NET library
 providing services like e.g. distributed key-value stores with self-organization features
-making it more durable to system downtime etc. Most importantly there is no single-point-of-failure
+making it very durable to system downtime etc. Most importantly there is no single-point-of-failure
 by design which might be a very desirable system feature for cloud services worth exploring.
 
 ## Chord Fundamentals
 The Chord system organizes a distributed service as a peer-to-peer network consisting of
 multiple independently acting service instances, called nodes. Those nodes are created
-equal and serve both payload and infrastructure tasks. All nodes are organized as a virtual
-token-ring topology which is commonly referred to as an overlay network. The term overlay
-network means that the virtual relations between nodes don't necessarily need not reflect
-the real-world network topology bound to machines, wires and other hardware devices.
+equal and serve both payload and infrastructure tasks. All nodes are organized using a virtual
+token-ring topology as the overlay network. The term overlay network means that the virtual
+relations between nodes do not necessarily need to reflect the real-world network topology
+bound to machines, wires and other hardware devices.
 
 ### Chord Nodes and Data Items
 Now that it's clear how the Chord cluster looks like, let's have a look at the way the nodes 
@@ -67,7 +67,7 @@ down gracefully after finalizing the whole process.
 Monitor the health status of all nodes connected (neighbours and fingers) on a regular
 time schedule. Initiate repair operations for nodes having a downtime (e.g. bridge the node
 and recover the data from successor nodes that oftentimes share data with their direct neighbours).
-Moreover, also update the 
+Moreover, also re-create the finger tables on a regular basis as they might change over time.
 
 ### 5) Serve Payload Functionality
 The actual functionality of the service should be organized such that each node can serve
@@ -79,16 +79,18 @@ may be supported by the Chord.Lib and should rely onto the payload service desig
 ## Components and Deployment
 The Chord.Lib package can be used by web services to establish a Chord peer-to-peer (P2P) network.
 Therefore it exposes all of Chord's core functionality asynchronously, facilitating 
-high-performance parallel operations. In particular, a Chord.Lib node needs to be given some
-callbacks enabling it to exchange messages with other nodes like key lookups or health checks, etc.
-Last, there should also be an entire ASP.NET endpoint controller class that can be easily attached
-to existing ASP.NET services to get access to the Chord routing.
+high-performance parallel operations. In particular, a Chord.Lib node needs to be given a
+callback enabling it to exchange messages with other nodes like key lookups or health checks, etc.
+Each of those nodes instances may also be linked to an ASP.NET endpoint controller class providing
+exactly that message submission. This should help integrating the Chord endpoint making it
+obsolete to re-develop the ASP.NET endpoint controller again and again, but also allows 
+implementing the endpoint individually when needed targeting maximum flexibility and convenience.
 
 Those Chord functions are not only provided as a .NET package but also as an entire dockerized
-container exposing ASP.NET endpoint. This container is supposed to be paired with another
-container serving the payload functionality, i.e. each pair of those two containers can be
-seen as something like a Kubernetes pod gluing the containers together. Requesters can now
-enter the Chord cluster from any node and get forwarded to the node serving the payload.
+container exposing the ASP.NET endpoint. This container can then be paired with another
+container serving the actual payload functionality such that each pair of those two containers
+can be seen as something like a Kubernetes pod gluing the containers together. Requesters can
+now enter the Chord cluster from any node and get forwarded to the node serving the payload.
 
 For testing purposes there is a very simple key-value store service using the Chord library.
 Those dockerized service nodes can be deployed e.g. as a Kubernetes load-balanced service
