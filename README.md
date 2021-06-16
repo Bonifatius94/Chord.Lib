@@ -77,6 +77,8 @@ which node to call instead or actually handing the results through (piggyback). 
 may be supported by the Chord.Lib and should rely onto the payload service design.
 
 ## Components and Deployment
+
+### Chord.Lib Components
 The Chord.Lib package can be used by web services to establish a Chord peer-to-peer (P2P) network.
 Therefore it exposes all of Chord's core functionality asynchronously, facilitating 
 high-performance parallel operations. In particular, a Chord.Lib node needs to be given a
@@ -86,15 +88,18 @@ exactly that message submission. This approach should help integrating the Chord
 obsolete to re-develop the ASP.NET endpoint controller again and again, but also allowing to
 implement the endpoint individually when needed targeting maximum flexibility and convenience.
 
+### Dockerized Chord
 Those Chord functions are not only provided as a .NET package but also as an entire dockerized
 container exposing the ASP.NET endpoint. This container can then be paired with another
 container serving the actual payload functionality such that each pair of those two containers
 can be seen as something like a Kubernetes pod gluing the containers together. Requesters can
 now enter the Chord cluster from any node and get forwarded to the node serving the payload.
+This should allow to attach the Chord protocol to basically any existing single-node service.
 
-For testing purposes there is a very simple key-value store service using the Chord library.
+### Example Deployment
+For demonstration purposes there is a very simple key-value store service using the Chord library.
 Those dockerized service nodes can be deployed e.g. as a Kubernetes load-balanced service
-like already described in the last sections.
+like already described in the last section.
 
 ## Disclaimer
 There is still WIP, so be cautious when using this code as it might not work properly yet.
