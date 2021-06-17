@@ -28,6 +28,7 @@ namespace Chord.Lib.Core
         long NodeId { get; set; }
         string IpAddress { get; set; }
         string Port { get; set; }
+        ChordHealthStatus State { get; set; }
     }
 
     public interface IChordRequestMessage
@@ -37,7 +38,8 @@ namespace Chord.Lib.Core
         long RequesterId { get; set; }
         long RequestedResourceId { get; set; }
 
-        // TODO: make sure those features suffice
+        // additional message features for the join/leave procedure
+        long NewSuccessor { get; set; }
     }
 
     public interface IChordResponseMessage
@@ -45,7 +47,7 @@ namespace Chord.Lib.Core
         // core message features
         IChordRemoteNode Responder { get; set; }
 
-        // additional message features for the join procedure
+        // additional message features for the join/leave procedure
         bool ReadyForDataCopy { get; set; }
         IChordRemoteNode Predecessor { get; set; }
         IEnumerable<IChordRemoteNode> FingerTable { get; set; }
@@ -57,21 +59,26 @@ namespace Chord.Lib.Core
         public long NodeId { get; set; }
         public string IpAddress { get; set; }
         public string Port { get; set; }
+        public ChordHealthStatus State { get; set; } = ChordHealthStatus.Questionable;
     }
 
     public class ChordRequestMessage : IChordRequestMessage
     {
+        // core request message features
         public ChordRequestType Type { get; set; }
         public long RequesterId { get; set; }
         public long RequestedResourceId { get; set; }
+
+        // additional message features for the join/leave procedure
+        public long NewSuccessor { get; set; }
     }
 
     public class ChordResponseMessage : IChordResponseMessage
     {
-        // core message features
+        // core response message features
         public IChordRemoteNode Responder { get; set; }
 
-        // additional message features for the join procedure
+        // additional message features for the join/leave procedure
         public bool ReadyForDataCopy { get; set; }
         public IChordRemoteNode Predecessor { get; set; }
         public IEnumerable<IChordRemoteNode> FingerTable { get; set; }
