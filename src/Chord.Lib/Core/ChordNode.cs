@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 
 namespace Chord.Lib.Core
 {
-    // shortcut for message callback function
-    using MessageCallback = System.Func<IChordRequestMessage, Task<IChordResponseMessage>>;
+    // shortcut for message callback function: (message, receiver) -> response
+    using MessageCallback = System.Func<IChordRequestMessage, IChordRemoteNode, Task<IChordResponseMessage>>;
 
     public class ChordNode
     {
@@ -32,14 +32,14 @@ namespace Chord.Lib.Core
         private IDictionary<long, IChordRemoteNode> fingerTable
             = new Dictionary<long, IChordRemoteNode>();
 
-        public async Task JoinNetwork()
+        public async Task JoinNetwork(IChordRemoteNode bootstrap)
         {
             // phase 1: determine the successor by a key lookup
 
             do {
 
                 nodeId = getRandId();
-                successor = await LookupKey(nodeId);
+                successor = await LookupKey(nodeId, bootstrap);
 
             // continue until the generated node id is unique
             } while (successor.NodeId == nodeId);
@@ -47,10 +47,13 @@ namespace Chord.Lib.Core
             // phase 2: initiate the join process
 
             // send a join initiation request to the successor
-            var response = await sendRequest(new ChordRequestMessage() {
-                Type = ChordRequestType.InitNodeJoin,
-                RequesterId = nodeId
-            });
+            var response = await sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.InitNodeJoin,
+                    RequesterId = nodeId
+                },
+                successor
+            );
 
             if (!response.ReadyForDataCopy) {
                 throw new InvalidOperationException("Network join failed! Cannot copy payload data!"); }
@@ -66,32 +69,47 @@ namespace Chord.Lib.Core
             // phase 4: finalize the join process
 
             // send a join initiation request to the successor
-            response = await sendRequest(new ChordRequestMessage() {
-                Type = ChordRequestType.CommitNodeJoin,
-                RequesterId = nodeId
-            });
+            // -> the successor sends an 'update successor' request to his predecessor
+            // -> the predecessor's successor then points to this node
+            // -> from then on this node is available to other Chord nodes on the network
+            response = await sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.CommitNodeJoin,
+                    RequesterId = nodeId
+                },
+                successor
+            );
 
             // apply the node settings
             predecessor = response.Predecessor;
             fingerTable = response.FingerTable.ToDictionary(x => x.NodeId);
+            fingerTable.Add(successor.NodeId, successor);
 
             // the node is now ready for use
         }
 
         public async Task LeaveNetwork()
         {
-            // TODO: implement logic
-            throw new NotImplementedException();
+            
         }
 
-        public async Task<IChordRemoteNode> LookupKey(long key)
+        public async Task<IChordRemoteNode> LookupKey(
+            long key, IChordRemoteNode explicitReceiver=null)
         {
+            // determine the receiver to be forwarded the lookup request
+            long bestFingerId = fingerTable.Keys.Select(x => x - nodeId)
+                .Where(x => x <= key - nodeId).Max() + nodeId;
+            var receiver = explicitReceiver ?? fingerTable[bestFingerId];
+
             // send a key lookup request
-            var lookupResponse = await sendRequest(new ChordRequestMessage() {
-                Type = ChordRequestType.KeyLookup,
-                RequesterId = nodeId,
-                RequestedResourceId = key
-            });
+            var lookupResponse = await sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.KeyLookup,
+                    RequesterId = nodeId,
+                    RequestedResourceId = key
+                },
+                receiver
+            );
 
             // return the node responsible for the key
             return lookupResponse.Responder;
@@ -111,7 +129,8 @@ namespace Chord.Lib.Core
         private long getRandId()
         {
             // concatenate two random 32-bit integers to a long value
-            return ((long)rng.Next() << 32) | (long)(uint)rng.Next();
+            return ((long)rng.Next(int.MinValue, int.MaxValue) << 32)
+                 | (long)(uint)rng.Next(int.MinValue, int.MaxValue);
         }
 
         #endregion Helpers
