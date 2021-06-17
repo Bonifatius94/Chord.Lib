@@ -145,7 +145,7 @@ namespace Chord.Lib.Core
             var receiver = explicitReceiver ?? fingerTable[getBestFingerId(key)];
 
             // send a key lookup request
-            var lookupResponse = await sendRequest(
+            var response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.KeyLookup,
                     RequesterId = nodeId,
@@ -155,13 +155,30 @@ namespace Chord.Lib.Core
             );
 
             // return the node responsible for the key
-            return lookupResponse.Responder;
+            return response.Responder;
         }
 
-        public async Task<ChordHealthStatus> CheckHealth(IChordRemoteNode target)
+        public async Task<ChordHealthStatus> CheckHealth(
+            IChordRemoteNode target, int timeoutInSecs=10,
+            ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
         {
-            // TODO: implement logic
-            throw new NotImplementedException();
+            // send a health check request
+            var cancelCallback = new CancellationTokenSource();
+            var timeoutTask = Task.Delay(timeoutInSecs * 1000);
+            var healthCheckTask = Task.Run(() => sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.HealthCheck,
+                    RequesterId = nodeId,
+                },
+                target
+            ), cancelCallback.Token);
+
+            // return the reported health state or the fail status (timeout)
+            bool timeout = await Task.WhenAny(timeoutTask, healthCheckTask) == timeoutTask;
+            if (timeout) { cancelCallback.Cancel(); }
+            return timeout ? failStatus : healthCheckTask.Result.Responder.State;
+
+            // TODO: think about killing dangling requests
         }
 
         private void monitorFingerHealth(CancellationToken token)
@@ -188,32 +205,21 @@ namespace Chord.Lib.Core
             ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
         {
             // run health checks for each finger in parallel
-            var callback = new CancellationTokenSource();
             var healthCheckTasks = fingerTable.Values
-                .Select(x => Task.Run(() => 
-                    new { x.NodeId, Health=CheckHealth(x).Result },
-                    callback.Token))
-                .ToArray();
+                .Select(x => Task.Run(() => new { 
+                    NodeId = x.NodeId,
+                    Health=CheckHealth(x, timeoutSecs, failStatus).Result
+                })).ToArray();
+            Task.WaitAll(healthCheckTasks);
 
-            // timeout dangling tasks and cancel them
-            var timeoutTask = Task.Delay(timeoutSecs * 1000);
-            int id = Task.WaitAny(Task.Run(() => Task.WaitAll(healthCheckTasks)), timeoutTask);
-            if (id == timeoutTask.Id) { callback.Cancel(); }
-
-            // collect the queried health states
-            var healthyFingers = healthCheckTasks.Where(x => x.IsCompletedSuccessfully)
-                .ToDictionary(x => x.Result.NodeId, x => x.Result.Health);
-            var questionableFingers = healthCheckTasks.Where(x => x.IsCanceled)
-                .Select(x => x.Result.NodeId).ToHashSet();
+            // collect health check results
+            var healthStates = healthCheckTasks.Select(x => x.Result)
+                .ToDictionary(x => x.NodeId, x => x.Health);
 
             // update finger states
             foreach (var finger in fingers)
             {
-                if (healthyFingers.ContainsKey(finger.NodeId)) {
-                    finger.State = healthyFingers[finger.NodeId];
-                } else if (questionableFingers.Contains(finger.NodeId)) {
-                    finger.State = failStatus;
-                }
+                finger.State = healthStates[finger.NodeId];
             }
         }
 
