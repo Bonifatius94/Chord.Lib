@@ -22,7 +22,7 @@ namespace Chord.Lib.Core
         Dead
     }
 
-    public interface IChordRemoteNode
+    public interface IChordEndpoint
     {
         // summary of remote node features
         long NodeId { get; set; }
@@ -39,22 +39,23 @@ namespace Chord.Lib.Core
         long RequestedResourceId { get; set; }
 
         // additional message features for the join/leave procedure
-        long NewSuccessor { get; set; }
+        IChordEndpoint NewSuccessor { get; set; }
+        IChordEndpoint NewPredecessor { get; set; }
     }
 
     public interface IChordResponseMessage
     {
         // core message features
-        IChordRemoteNode Responder { get; set; }
+        IChordEndpoint Responder { get; set; }
 
         // additional message features for the join/leave procedure
         bool ReadyForDataCopy { get; set; }
         bool CommitSuccessful { get; set; }
-        IChordRemoteNode Predecessor { get; set; }
-        IEnumerable<IChordRemoteNode> FingerTable { get; set; }
+        IChordEndpoint Predecessor { get; set; }
+        IEnumerable<IChordEndpoint> FingerTable { get; set; }
     }
 
-    public class ChordRemoteNode
+    public class ChordEndpoint : IChordEndpoint
     {
         // summary of remote node features
         public long NodeId { get; set; }
@@ -71,18 +72,19 @@ namespace Chord.Lib.Core
         public long RequestedResourceId { get; set; }
 
         // additional message features for the join/leave procedure
-        public long NewSuccessor { get; set; }
+        public IChordEndpoint NewSuccessor { get; set; }
+        public IChordEndpoint NewPredecessor { get; set; }
     }
 
     public class ChordResponseMessage : IChordResponseMessage
     {
         // core response message features
-        public IChordRemoteNode Responder { get; set; }
+        public IChordEndpoint Responder { get; set; }
 
         // additional message features for the join/leave procedure
         public bool ReadyForDataCopy { get; set; }
         public bool CommitSuccessful { get; set; }
-        public IChordRemoteNode Predecessor { get; set; }
-        public IEnumerable<IChordRemoteNode> FingerTable { get; set; }
+        public IChordEndpoint Predecessor { get; set; }
+        public IEnumerable<IChordEndpoint> FingerTable { get; set; }
     }
 }

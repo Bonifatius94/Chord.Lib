@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace Chord.Lib.Core
 {
     // shortcut for message callback function: (message, receiver) -> response
-    using MessageCallback = System.Func<IChordRequestMessage, IChordRemoteNode, Task<IChordResponseMessage>>;
+    using MessageCallback = System.Func<IChordRequestMessage, IChordEndpoint, Task<IChordResponseMessage>>;
 
     public class ChordNode
     {
@@ -19,8 +19,8 @@ namespace Chord.Lib.Core
         /// <param name="maxId">The max. resource id to be addressed (default: 2^63-1).</param>
         /// <param name="monitorHealthSchedule">The delay in seconds between health monitoring tasks (default: 5 minutes).</param>
         /// <param name="updateTableSchedule">The delay in seconds between finger table update tasks (default: 5 minutes).</param>
-        public ChordNode(MessageCallback sendRequest, long maxId=long.MaxValue,
-            int monitorHealthSchedule=600, int updateTableSchedule=600)
+        public ChordNode(IChordEndpoint localEndpoint, MessageCallback sendRequest,
+            long maxId=long.MaxValue, int monitorHealthSchedule=600, int updateTableSchedule=600)
         {
             this.sendRequest = sendRequest;
             this.maxId = maxId;
@@ -31,18 +31,21 @@ namespace Chord.Lib.Core
         private int monitorHealthSchedule;
         private int updateTableSchedule;
 
+        // TODO: refactor nodeId into local.NodeId
         private long nodeId;
-        private IChordRemoteNode successor = null;
-        private IChordRemoteNode predecessor = null;
+        private IChordEndpoint local = null;
+        private IChordEndpoint successor = null;
+        private IChordEndpoint predecessor = null;
 
-        private IDictionary<long, IChordRemoteNode> fingerTable
-            = new Dictionary<long, IChordRemoteNode>();
+        private IDictionary<long, IChordEndpoint> fingerTable
+            = new Dictionary<long, IChordEndpoint>();
 
         private CancellationTokenSource backgroundTaskCallback;
 
         #region Chord Client
 
-        public async Task JoinNetwork(IChordRemoteNode bootstrap)
+        public async Task JoinNetwork(IChordEndpoint bootstrap,
+            string ipAddress, string port)
         {
             // phase 1: determine the successor by a key lookup
 
@@ -55,6 +58,13 @@ namespace Chord.Lib.Core
             } while (successor.NodeId == nodeId);
 
             // phase 2: initiate the join process
+
+            local = new ChordEndpoint() {
+                NodeId = nodeId,
+                State = ChordHealthStatus.Idle,
+                IpAddress = ipAddress,
+                Port = port
+            };
 
             // send a join initiation request to the successor
             var response = await sendRequest(
@@ -85,7 +95,8 @@ namespace Chord.Lib.Core
             response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.CommitNodeJoin,
-                    RequesterId = nodeId
+                    RequesterId = nodeId,
+                    NewSuccessor = local
                 },
                 successor
             );
@@ -98,6 +109,8 @@ namespace Chord.Lib.Core
             predecessor = response.Predecessor;
             fingerTable = response.FingerTable.ToDictionary(x => x.NodeId);
             fingerTable.Add(successor.NodeId, successor);
+            local.State = ChordHealthStatus.Idle;
+
             // -> the node is now ready for use
 
             // start the health monitoring / finger table update
@@ -126,7 +139,7 @@ namespace Chord.Lib.Core
 
                     while (!token.IsCancellationRequested)
                     {
-                        updateFingerTable(token).Wait();
+                        updateFingerTable(token);
                         Task.Delay(updateTableSchedule * 1000).Wait();
                     }
                 });
@@ -169,7 +182,8 @@ namespace Chord.Lib.Core
             response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.CommitNodeLeave,
-                    RequesterId = nodeId
+                    RequesterId = nodeId,
+                    NewPredecessor = predecessor
                 },
                 successor
             );
@@ -182,8 +196,8 @@ namespace Chord.Lib.Core
             backgroundTaskCallback.Cancel();
         }
 
-        public async Task<IChordRemoteNode> LookupKey(
-            long key, IChordRemoteNode explicitReceiver=null)
+        public async Task<IChordEndpoint> LookupKey(
+            long key, IChordEndpoint explicitReceiver=null)
         {
             // determine the receiver to be forwarded the lookup request to
             var receiver = explicitReceiver ?? fingerTable[getBestFingerId(key)];
@@ -203,7 +217,7 @@ namespace Chord.Lib.Core
         }
 
         public async Task<ChordHealthStatus> CheckHealth(
-            IChordRemoteNode target, int timeoutInSecs=10,
+            IChordEndpoint target, int timeoutInSecs=10,
             ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
         {
             // send a health check request
@@ -243,7 +257,7 @@ namespace Chord.Lib.Core
             // TODO: exit critical section (mutex)
         }
 
-        private void updateHealth(List<IChordRemoteNode> fingers, int timeoutSecs, 
+        private void updateHealth(List<IChordEndpoint> fingers, int timeoutSecs, 
             ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
         {
             // run health checks for each finger in parallel
@@ -262,7 +276,7 @@ namespace Chord.Lib.Core
             fingers.ForEach(finger => finger.State = healthStates[finger.NodeId]);
         }
 
-        private async Task updateFingerTable(CancellationToken token)
+        private void updateFingerTable(CancellationToken token)
         {
             // TODO: enter critical section (mutex)
 
@@ -291,7 +305,8 @@ namespace Chord.Lib.Core
 
         #region Chord Server
 
-        public async Task<IChordResponseMessage> ProcessRequest(IChordRequestMessage request)
+        public async Task<IChordResponseMessage> ProcessRequest(
+            IChordRequestMessage request)
         {
             switch (request.Type)
             {
@@ -324,18 +339,16 @@ namespace Chord.Lib.Core
         private async Task<IChordResponseMessage> processKeyLookup(
             IChordRequestMessage request)
         {
-            // TODO: implement logic
-            throw new NotImplementedException();
+            // perform key lookup and return the endpoint responsible for the key
+            var responder = await LookupKey(request.RequestedResourceId);
+            return new ChordResponseMessage() { Responder = responder };
         }
 
         private async Task<IChordResponseMessage> processHealthCheck(
             IChordRequestMessage request)
         {
-            // respond to a health check with the current node state
-            // 
-
-            // TODO: implement logic
-            throw new NotImplementedException();
+            // just send back the local endpoint containing the health state
+            return new ChordResponseMessage() { Responder = local };
         }
 
         private async Task<IChordResponseMessage> processInitNodeJoin(
@@ -345,8 +358,13 @@ namespace Chord.Lib.Core
             // inform the payload component that it has to send the payload
             // data chunk to the joining node that it is now responsible for
 
-            // TODO: implement logic
-            throw new NotImplementedException();
+            // currently nothing to do here ...
+            // TODO: trigger copy process for payload data transmission
+
+            return new ChordResponseMessage() {
+                Responder = local,
+                ReadyForDataCopy = true
+            };
         }
 
         private async Task<IChordResponseMessage> processCommitNodeJoin(
@@ -356,8 +374,18 @@ namespace Chord.Lib.Core
             // -> predecessor.successor = joining node
             // -> this.predecessor = joining node
 
-            // TODO: implement logic
-            throw new NotImplementedException();
+            var response = await sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.UpdateSuccessor,
+                    RequesterId = nodeId,
+                    NewSuccessor = request.NewSuccessor
+                },
+                predecessor);
+
+            return new ChordResponseMessage() {
+                Responder = local,
+                CommitSuccessful = response.CommitSuccessful
+            };
         }
 
         private async Task<IChordResponseMessage> processInitNodeLeave(
@@ -366,8 +394,12 @@ namespace Chord.Lib.Core
             // prepare for the predecessor leaving the network
             // inform the payload component that it will be sent payload data
 
-            // TODO: implement logic
-            throw new NotImplementedException();
+            // currently nothing to do here ...
+
+            return new ChordResponseMessage() {
+                Responder = local,
+                ReadyForDataCopy = true
+            };
         }
 
         private async Task<IChordResponseMessage> processCommitNodeLeave(
@@ -376,18 +408,37 @@ namespace Chord.Lib.Core
             // request updating the leaving node's prodecessor's successor
             // -> predecessor.successor = this node
 
-            // TODO: implement logic
-            throw new NotImplementedException();
+            var response = await sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.UpdateSuccessor,
+                    RequesterId = nodeId,
+                    NewSuccessor = request.NewSuccessor
+                },
+                predecessor);
+
+            return new ChordResponseMessage() {
+                Responder = local,
+                CommitSuccessful = response.CommitSuccessful
+            };
         }
 
         private async Task<IChordResponseMessage> processUpdateSuccessor(
             IChordRequestMessage request)
         {
-            // ping the new successor by sending a health check
-            // if the new successor's health is fine, then update the successor
+            const int timeout = 10;
 
-            // TODO: implement logic
-            throw new NotImplementedException();
+            // ping the new successor to make sure it is healthy
+            var status = await CheckHealth(request.NewSuccessor, timeout, ChordHealthStatus.Dead);
+            bool canUpdate = status != ChordHealthStatus.Dead;
+
+            // update the successor
+            if (canUpdate) { successor = request.NewSuccessor; }
+
+            // respond whether the update was successful
+            return new ChordResponseMessage() {
+                Responder = local,
+                CommitSuccessful = canUpdate
+            };
         }
 
         #endregion Chord Server
@@ -398,6 +449,7 @@ namespace Chord.Lib.Core
         {
             // cache the finger table ids to ensure operation consistency
             var cachedFingerIds = fingerTable.Keys.ToList();
+            // TODO: think of only forwarding to healthy nodes
 
             // make sure the finger table is not empty
             if (cachedFingerIds.Count == 0) { throw new InvalidOperationException(
