@@ -44,6 +44,13 @@ namespace Chord.Lib.Core
 
         #region Chord Client
 
+        /// <summary>
+        /// Create a new chord endpoint and join it to the network.
+        /// </summary>
+        /// <param name="bootstrap">The entrypoint to issue the first lookup request to.</param>
+        /// <param name="ipAddress">The local endpoint's IP address.</param>
+        /// <param name="port">The local endpoint's port.</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task JoinNetwork(IChordEndpoint bootstrap,
             string ipAddress, string port)
         {
@@ -149,6 +156,10 @@ namespace Chord.Lib.Core
             });
         }
 
+        /// <summary>
+        /// Shut down this chord endpoint by leaving the network gracefully.
+        /// </summary>
+        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task LeaveNetwork()
         {
             // phase 1: initiate the leave process
@@ -196,6 +207,12 @@ namespace Chord.Lib.Core
             backgroundTaskCallback.Cancel();
         }
 
+        /// <summary>
+        /// Look up the chord node responsible for the given key.
+        /// </summary>
+        /// <param name="key">The key to be looked up.</param>
+        /// <param name="explicitReceiver">An explicit receiver to send the request to (optional).</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task<IChordEndpoint> LookupKey(
             long key, IChordEndpoint explicitReceiver=null)
         {
@@ -216,6 +233,13 @@ namespace Chord.Lib.Core
             return response.Responder;
         }
 
+        /// <summary>
+        /// Check the health status of the given target chord endpoint.
+        /// </summary>
+        /// <param name="target">The endpoint to check the health of.</param>
+        /// <param name="timeoutInSecs">The timeout seconds to be waited for a response (default: 10s).</param>
+        /// <param name="failStatus">The default status when the check times out (default: questionable).</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task<ChordHealthStatus> CheckHealth(
             IChordEndpoint target, int timeoutInSecs=10,
             ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
@@ -305,6 +329,11 @@ namespace Chord.Lib.Core
 
         #region Chord Server
 
+        /// <summary>
+        /// Process the given chord request the local endpoint just received.
+        /// </summary>
+        /// <param name="request">The chord request to be processed.</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task<IChordResponseMessage> ProcessRequest(
             IChordRequestMessage request)
         {
