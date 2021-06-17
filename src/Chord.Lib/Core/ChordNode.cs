@@ -44,11 +44,30 @@ namespace Chord.Lib.Core
             // continue until the generated node id is unique
             } while (successor.NodeId == nodeId);
 
-            // phase 2: initiate the join process and apply the node settings
+            // phase 2: initiate the join process
 
-            // send a join request to the successor
+            // send a join initiation request to the successor
             var response = await sendRequest(new ChordRequestMessage() {
                 Type = ChordRequestType.InitNodeJoin,
+                RequesterId = nodeId
+            });
+
+            if (!response.ReadyForDataCopy) {
+                throw new InvalidOperationException("Network join failed! Cannot copy payload data!"); }
+
+            // phase 3: copy all existing payload data this node is now responsible for
+
+            // TODO: For production use, make sure to copy payload data, too.
+            //       Keep in mind that the old successor is no more responsible for the ids
+            //       being assigned to this newly created node. So there needs to be a kind of
+            //       mechanism to copy the data first before enabling this node to avoid
+            //       temporary data unavailability.
+
+            // phase 4: finalize the join process
+
+            // send a join initiation request to the successor
+            response = await sendRequest(new ChordRequestMessage() {
+                Type = ChordRequestType.CommitNodeJoin,
                 RequesterId = nodeId
             });
 
@@ -57,13 +76,6 @@ namespace Chord.Lib.Core
             fingerTable = response.FingerTable.ToDictionary(x => x.NodeId);
 
             // the node is now ready for use
-
-            // TODO: For production use, make sure to copy payload data, too.
-            //       Keep in mind that the old successor is no more responsible for the ids
-            //       being assigned to this newly created node. So there needs to be a kind of
-            //       mechanism to copy the data first before enabling this node to avoid
-            //       temporary data unavailability.
-            //       -> think of adding another phase to the join protocol, just for copying data
         }
 
         public async Task LeaveNetwork()

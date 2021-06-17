@@ -46,6 +46,7 @@ namespace Chord.Lib.Core
         IChordRemoteNode Responder { get; set; }
 
         // additional message features for the join procedure
+        bool ReadyForDataCopy { get; set; }
         IChordRemoteNode Predecessor { get; set; }
         IEnumerable<IChordRemoteNode> FingerTable { get; set; }
     }
@@ -71,6 +72,7 @@ namespace Chord.Lib.Core
         public IChordRemoteNode Responder { get; set; }
 
         // additional message features for the join procedure
+        public bool ReadyForDataCopy { get; set; }
         public IChordRemoteNode Predecessor { get; set; }
         public IEnumerable<IChordRemoteNode> FingerTable { get; set; }
     }
