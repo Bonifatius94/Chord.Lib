@@ -8,7 +8,9 @@ namespace Chord.Lib.Core
         UpdateSuccessor,
         HealthCheck,
         InitNodeJoin,
+        CommitNodeJoin,
         InitNodeLeave,
+        CommitNodeLeave,
     }
 
     public enum ChordHealthStatus
