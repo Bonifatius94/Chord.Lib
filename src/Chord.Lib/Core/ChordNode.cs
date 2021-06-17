@@ -17,7 +17,10 @@ namespace Chord.Lib.Core
         /// </summary>
         /// <param name="sendRequest">The callback function for sending requests to other chord nodes.</param>
         /// <param name="maxId">The max. resource id to be addressed (default: 2^63-1).</param>
-        public ChordNode(MessageCallback sendRequest, long maxId=long.MaxValue)
+        /// <param name="monitorHealthSchedule">The delay in seconds between health monitoring tasks (default: 5 minutes).</param>
+        /// <param name="updateTableSchedule">The delay in seconds between finger table update tasks (default: 5 minutes).</param>
+        public ChordNode(MessageCallback sendRequest, long maxId=long.MaxValue,
+            int monitorHealthSchedule=600, int updateTableSchedule=600)
         {
             this.sendRequest = sendRequest;
             this.maxId = maxId;
@@ -25,6 +28,8 @@ namespace Chord.Lib.Core
 
         private MessageCallback sendRequest;
         private long maxId;
+        private int monitorHealthSchedule;
+        private int updateTableSchedule;
 
         private long nodeId;
         private IChordRemoteNode successor = null;
@@ -32,6 +37,8 @@ namespace Chord.Lib.Core
 
         private IDictionary<long, IChordRemoteNode> fingerTable
             = new Dictionary<long, IChordRemoteNode>();
+
+        private CancellationTokenSource backgroundTaskCallback;
 
         #region Chord Client
 
@@ -87,8 +94,42 @@ namespace Chord.Lib.Core
             predecessor = response.Predecessor;
             fingerTable = response.FingerTable.ToDictionary(x => x.NodeId);
             fingerTable.Add(successor.NodeId, successor);
+            // -> the node is now ready for use
 
-            // the node is now ready for use
+            // start the health monitoring / finger table update
+            // procedures as scheduled background tasks
+            backgroundTaskCallback = new CancellationTokenSource();
+            createBackgroundTasks(backgroundTaskCallback.Token);
+        }
+
+        private void createBackgroundTasks(CancellationToken token)
+        {
+            // define a task running the background tasks
+            Task.Run(() => {
+
+                // run the 'monitor health' task on a regular time schedule
+                var monitorTask = Task.Run(() => {
+
+                    while (!token.IsCancellationRequested)
+                    {
+                        monitorFingerHealth(token);
+                        Task.Delay(monitorHealthSchedule * 1000).Wait();
+                    }
+                });
+
+                // run the 'update table' task on a regular time schedule
+                var updateTableTask = Task.Run(() => {
+
+                    while (!token.IsCancellationRequested)
+                    {
+                        updateFingerTable(token).Wait();
+                        Task.Delay(updateTableSchedule * 1000).Wait();
+                    }
+                });
+
+                // wait until both tasks exited gracefully by cancellation
+                Task.WaitAll(new Task[] { monitorTask, updateTableTask });
+            });
         }
 
         public async Task LeaveNetwork()
@@ -117,13 +158,85 @@ namespace Chord.Lib.Core
             return lookupResponse.Responder;
         }
 
-        private async Task monitorFingerHealth(CancellationToken token)
+        public async Task<ChordHealthStatus> CheckHealth(IChordRemoteNode target)
         {
-            // loop through the finger table and send health checks
-            // update the finger table on a regular basis
-
             // TODO: implement logic
             throw new NotImplementedException();
+        }
+
+        private void monitorFingerHealth(CancellationToken token)
+        {
+            // TODO: enter critical section (mutex)
+
+            const int healthCheckTimeout = 10; // TODO: parameterize the delay by configuration
+            var cachedFingers = fingerTable.Values.ToList();
+
+            // perform a first health check for all finger nodes
+            updateHealth(cachedFingers, healthCheckTimeout, ChordHealthStatus.Questionable);
+            if (token.IsCancellationRequested) { return; } // TODO: release mutex
+
+            // perform a second health check for all questionable finger nodes
+            var questionableFingers = cachedFingers
+                .Where(x => x.State == ChordHealthStatus.Questionable).ToList();
+            updateHealth(questionableFingers, healthCheckTimeout / 2, ChordHealthStatus.Dead);
+            if (token.IsCancellationRequested) { return; } // TODO: release mutex
+
+            // TODO: exit critical section (mutex)
+        }
+
+        private void updateHealth(List<IChordRemoteNode> fingers, int timeoutSecs, 
+            ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
+        {
+            // run health checks for each finger in parallel
+            var callback = new CancellationTokenSource();
+            var healthCheckTasks = fingerTable.Values
+                .Select(x => Task.Run(() => 
+                    new { x.NodeId, Health=CheckHealth(x).Result },
+                    callback.Token))
+                .ToArray();
+
+            // timeout dangling tasks and cancel them
+            var timeoutTask = Task.Delay(timeoutSecs * 1000);
+            int id = Task.WaitAny(Task.Run(() => Task.WaitAll(healthCheckTasks)), timeoutTask);
+            if (id == timeoutTask.Id) { callback.Cancel(); }
+
+            // collect the queried health states
+            var healthyFingers = healthCheckTasks.Where(x => x.IsCompletedSuccessfully)
+                .ToDictionary(x => x.Result.NodeId, x => x.Result.Health);
+            var questionableFingers = healthCheckTasks.Where(x => x.IsCanceled)
+                .Select(x => x.Result.NodeId).ToHashSet();
+
+            // update finger states
+            foreach (var finger in fingers)
+            {
+                if (healthyFingers.ContainsKey(finger.NodeId)) {
+                    finger.State = healthyFingers[finger.NodeId];
+                } else if (questionableFingers.Contains(finger.NodeId)) {
+                    finger.State = failStatus;
+                }
+            }
+        }
+
+        private async Task updateFingerTable(CancellationToken token)
+        {
+            // TODO: add a mutex to protect this entrire critical section
+
+            // get the ids 2^i for i in { 0, ..., log2(maxId) - 1 } to be looked up
+            var keys = Enumerable.Range(0, (int)Math.Log2(maxId) - 1)
+                .Select(i => restMod((long)Math.Pow(i, 2) + nodeId, maxId))
+                .Select(normKey => (long)restMod(normKey - nodeId, maxId));
+
+            // run all lookup tasks in parallel
+            var lookupTasks = keys.Select(x => LookupKey(x)).ToArray();
+            Task.WaitAll(lookupTasks);
+
+            // create a new finger table by assigning the nodes that
+            // responded to the lookup requests (including the successor)
+            var fingers = lookupTasks.Select(x => x.Result);
+            var newTable = fingers.ToDictionary(x => x.NodeId);
+
+            // switch out the currently active finger table
+            fingerTable = newTable;
         }
 
         #endregion Chord Client
