@@ -10,10 +10,18 @@ namespace Chord.Lib.Core
     // shortcut for message callback function: (message, receiver) -> response
     using MessageCallback = System.Func<IChordRequestMessage, IChordEndpoint, Task<IChordResponseMessage>>;
 
+    /// <summary>
+    /// This class provides all core functionality of the chord protocol.
+    /// 
+    /// Note that this is supposed to be a logical chord endpoint abstracting
+    /// the actual network traffic. If you want to use this code properly, 
+    /// you need to provide a callback function for exchanging messages
+    /// between chord endpoints, etc. (see constructor).
+    /// </summary>
     public class ChordNode
     {
         /// <summary>
-        /// Create a new chord node with the given request callback and upper resource id bound.
+        /// Create a new chord node with the given request callback, upper resource id bound and timeout configuration.
         /// </summary>
         /// <param name="sendRequest">The callback function for sending requests to other chord nodes.</param>
         /// <param name="maxId">The max. resource id to be addressed (default: 2^63-1).</param>
@@ -31,8 +39,6 @@ namespace Chord.Lib.Core
         private int monitorHealthSchedule;
         private int updateTableSchedule;
 
-        // TODO: refactor nodeId into local.NodeId
-        private long nodeId;
         private IChordEndpoint local = null;
         private IChordEndpoint successor = null;
         private IChordEndpoint predecessor = null;
@@ -56,28 +62,28 @@ namespace Chord.Lib.Core
         {
             // phase 1: determine the successor by a key lookup
 
-            do {
-
-                nodeId = getRandId();
-                successor = await LookupKey(nodeId, bootstrap);
-
-            // continue until the generated node id is unique
-            } while (successor.NodeId == nodeId);
-
-            // phase 2: initiate the join process
-
             local = new ChordEndpoint() {
-                NodeId = nodeId,
+                NodeId = local.NodeId,
                 State = ChordHealthStatus.Idle,
                 IpAddress = ipAddress,
                 Port = port
             };
 
+            do {
+
+                local.NodeId = getRandId();
+                successor = await LookupKey(local.NodeId, bootstrap);
+
+            // continue until the generated node id is unique
+            } while (successor.NodeId == local.NodeId);
+
+            // phase 2: initiate the join process
+
             // send a join initiation request to the successor
             var response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.InitNodeJoin,
-                    RequesterId = nodeId
+                    RequesterId = local.NodeId
                 },
                 successor
             );
@@ -102,7 +108,7 @@ namespace Chord.Lib.Core
             response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.CommitNodeJoin,
-                    RequesterId = nodeId,
+                    RequesterId = local.NodeId,
                     NewSuccessor = local
                 },
                 successor
@@ -168,7 +174,7 @@ namespace Chord.Lib.Core
             var response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.InitNodeLeave,
-                    RequesterId = nodeId
+                    RequesterId = local.NodeId
                 },
                 successor
             );
@@ -193,7 +199,7 @@ namespace Chord.Lib.Core
             response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.CommitNodeLeave,
-                    RequesterId = nodeId,
+                    RequesterId = local.NodeId,
                     NewPredecessor = predecessor
                 },
                 successor
@@ -223,7 +229,7 @@ namespace Chord.Lib.Core
             var response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.KeyLookup,
-                    RequesterId = nodeId,
+                    RequesterId = local.NodeId,
                     RequestedResourceId = key
                 },
                 receiver
@@ -250,7 +256,7 @@ namespace Chord.Lib.Core
             var healthCheckTask = Task.Run(() => sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.HealthCheck,
-                    RequesterId = nodeId,
+                    RequesterId = local.NodeId,
                 },
                 target
             ), cancelCallback.Token);
@@ -306,8 +312,8 @@ namespace Chord.Lib.Core
 
             // get the ids 2^i for i in { 0, ..., log2(maxId) - 1 } to be looked up
             var keys = Enumerable.Range(0, (int)Math.Log2(maxId) - 1)
-                .Select(i => restMod((long)Math.Pow(i, 2) + nodeId, maxId))
-                .Select(normKey => (long)restMod(normKey - nodeId, maxId));
+                .Select(i => restMod((long)Math.Pow(i, 2) + local.NodeId, maxId))
+                .Select(normKey => (long)restMod(normKey - local.NodeId, maxId));
 
             // run all lookup tasks in parallel
             var lookupTasks = keys.Select(x => LookupKey(x)).ToArray();
@@ -406,7 +412,7 @@ namespace Chord.Lib.Core
             var response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.UpdateSuccessor,
-                    RequesterId = nodeId,
+                    RequesterId = local.NodeId,
                     NewSuccessor = request.NewSuccessor
                 },
                 predecessor);
@@ -440,7 +446,7 @@ namespace Chord.Lib.Core
             var response = await sendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.UpdateSuccessor,
-                    RequesterId = nodeId,
+                    RequesterId = local.NodeId,
                     NewSuccessor = request.NewSuccessor
                 },
                 predecessor);
