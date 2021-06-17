@@ -90,6 +90,10 @@ namespace Chord.Lib.Core
                 successor
             );
 
+            // make sure the successor did successfully commit the join
+            if (!response.CommitSuccessful) { throw new InvalidOperationException(
+                "Joining the network unexpectedly failed! Please try again!"); }
+
             // apply the node settings
             predecessor = response.Predecessor;
             fingerTable = response.FingerTable.ToDictionary(x => x.NodeId);
@@ -134,8 +138,48 @@ namespace Chord.Lib.Core
 
         public async Task LeaveNetwork()
         {
-            // TODO: implement logic
-            throw new NotImplementedException();
+            // phase 1: initiate the leave process
+
+            // send a leave initiation request to the successor
+            var response = await sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.InitNodeLeave,
+                    RequesterId = nodeId
+                },
+                successor
+            );
+
+            if (!response.ReadyForDataCopy) {
+                throw new InvalidOperationException("Network leave failed! Cannot copy payload data!"); }
+
+            // phase 2: copy all existing payload data from this node to the successor
+
+            // TODO: For production use, make sure to copy payload data, too.
+            //       Keep in mind that this node is no more responsible for the ids
+            //       being assigned to the successor. So there needs to be a kind of
+            //       mechanism to copy the data first before safely leaving without
+            //       temporary data unavailability.
+
+            // phase 3: finalize the leave process
+
+            // send a join initiation request to the successor
+            // -> the successor sends an 'update successor' request to this node's predecessor
+            // -> the predecessor's successor then points to this node's successor
+            // -> from then on this node is no more available by other Chord nodes and can leave
+            response = await sendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.CommitNodeLeave,
+                    RequesterId = nodeId
+                },
+                successor
+            );
+
+            // make sure the successor did successfully commit the join
+            if (!response.CommitSuccessful) { throw new InvalidOperationException(
+                "Leaving the network unexpectedly failed! Please try again!"); }
+
+            // shut down all background tasks (health monitoring and finger table updates)
+            backgroundTaskCallback.Cancel();
         }
 
         public async Task<IChordRemoteNode> LookupKey(
@@ -177,8 +221,6 @@ namespace Chord.Lib.Core
             bool timeout = await Task.WhenAny(timeoutTask, healthCheckTask) == timeoutTask;
             if (timeout) { cancelCallback.Cancel(); }
             return timeout ? failStatus : healthCheckTask.Result.Responder.State;
-
-            // TODO: think about killing dangling requests
         }
 
         private void monitorFingerHealth(CancellationToken token)
@@ -217,15 +259,12 @@ namespace Chord.Lib.Core
                 .ToDictionary(x => x.NodeId, x => x.Health);
 
             // update finger states
-            foreach (var finger in fingers)
-            {
-                finger.State = healthStates[finger.NodeId];
-            }
+            fingers.ForEach(finger => finger.State = healthStates[finger.NodeId]);
         }
 
         private async Task updateFingerTable(CancellationToken token)
         {
-            // TODO: add a mutex to protect this entrire critical section
+            // TODO: enter critical section (mutex)
 
             // get the ids 2^i for i in { 0, ..., log2(maxId) - 1 } to be looked up
             var keys = Enumerable.Range(0, (int)Math.Log2(maxId) - 1)
@@ -235,6 +274,7 @@ namespace Chord.Lib.Core
             // run all lookup tasks in parallel
             var lookupTasks = keys.Select(x => LookupKey(x)).ToArray();
             Task.WaitAll(lookupTasks);
+            // TODO: add timeout
 
             // create a new finger table by assigning the nodes that
             // responded to the lookup requests (including the successor)
@@ -243,6 +283,8 @@ namespace Chord.Lib.Core
 
             // switch out the currently active finger table
             fingerTable = newTable;
+
+            // TODO: leave critical section (mutex)
         }
 
         #endregion Chord Client

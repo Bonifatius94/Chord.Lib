@@ -49,6 +49,7 @@ namespace Chord.Lib.Core
 
         // additional message features for the join/leave procedure
         bool ReadyForDataCopy { get; set; }
+        bool CommitSuccessful { get; set; }
         IChordRemoteNode Predecessor { get; set; }
         IEnumerable<IChordRemoteNode> FingerTable { get; set; }
     }
@@ -80,6 +81,7 @@ namespace Chord.Lib.Core
 
         // additional message features for the join/leave procedure
         public bool ReadyForDataCopy { get; set; }
+        public bool CommitSuccessful { get; set; }
         public IChordRemoteNode Predecessor { get; set; }
         public IEnumerable<IChordRemoteNode> FingerTable { get; set; }
     }
