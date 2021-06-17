@@ -55,6 +55,15 @@ namespace Chord.Lib.Core
             // apply the node settings
             predecessor = response.Predecessor;
             fingerTable = response.FingerTable.ToDictionary(x => x.NodeId);
+
+            // the node is now ready for use
+
+            // TODO: For production use, make sure to copy payload data, too.
+            //       Keep in mind that the old successor is no more responsible for the ids
+            //       being assigned to this newly created node. So there needs to be a kind of
+            //       mechanism to copy the data first before enabling this node to avoid
+            //       temporary data unavailability.
+            //       -> think of adding another phase to the join protocol, just for copying data
         }
 
         public async Task LeaveNetwork()
