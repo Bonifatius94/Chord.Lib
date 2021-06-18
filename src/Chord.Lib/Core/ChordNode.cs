@@ -27,11 +27,13 @@ namespace Chord.Lib.Core
         /// <param name="maxId">The max. resource id to be addressed (default: 2^63-1).</param>
         /// <param name="monitorHealthSchedule">The delay in seconds between health monitoring tasks (default: 5 minutes).</param>
         /// <param name="updateTableSchedule">The delay in seconds between finger table update tasks (default: 5 minutes).</param>
-        public ChordNode(IChordEndpoint localEndpoint, MessageCallback sendRequest,
-            long maxId=long.MaxValue, int monitorHealthSchedule=600, int updateTableSchedule=600)
+        public ChordNode(MessageCallback sendRequest, long maxId=long.MaxValue, 
+            int monitorHealthSchedule=600, int updateTableSchedule=600)
         {
             this.sendRequest = sendRequest;
             this.maxId = maxId;
+            this.monitorHealthSchedule = monitorHealthSchedule;
+            this.updateTableSchedule = updateTableSchedule;
         }
 
         private MessageCallback sendRequest;
