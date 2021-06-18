@@ -10,7 +10,7 @@ namespace Chord.Config
     /// <summary>
     /// Helper for retrieving network settings (IP address and port) of the node.
     /// </summary>
-    public static class IpSettings
+    public static class IpSettingUtils
     {
         #region Constants
 
@@ -27,7 +27,8 @@ namespace Chord.Config
         /// <summary>
         /// A regular expression for validating network CIDR format.
         /// </summary>
-        private const string REGEX_NETWORK_CIDR = "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
+        private const string REGEX_NETWORK_CIDR =
+            "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$";
 
         #endregion Constants
 
@@ -48,13 +49,17 @@ namespace Chord.Config
             string networkCidr = Environment.GetEnvironmentVariable(ENV_SETTING_CHORD_NETWORK_CIDR);
 
             // get all IP addresses of ethernet controllers plugged to the node
-            var ipAddresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList.Where(x => x.AddressFamily == AddressFamily.InterNetwork).ToList();
+            var ipAddresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList
+                .Where(x => x.AddressFamily == AddressFamily.InterNetwork).ToList();
 
             // determine the first IP address that is part of the given network mask (default: use first IP address available)
-            var chordIpv4Address = networkCidr != null ? ipAddresses.FirstOrDefault(address => isPartOfNetwork(address.ToString(), networkCidr)) : ipAddresses.FirstOrDefault();
+            var chordIpv4Address = networkCidr != null
+                ? ipAddresses.FirstOrDefault(address => isPartOfNetwork(address.ToString(), networkCidr)) 
+                : ipAddresses.FirstOrDefault();
 
             // make sure that an IP address was found
-            if (string.IsNullOrEmpty(chordIpv4Address?.ToString())) { throw new IOException("No suitable ethernet interface detected! Cannot connect to other peers!"); }
+            if (string.IsNullOrEmpty(chordIpv4Address?.ToString())) { throw new IOException(
+                "No suitable ethernet interface detected! Cannot connect to other peers!"); }
 
             return chordIpv4Address;
         }
@@ -76,10 +81,12 @@ namespace Chord.Config
             string networkCidr = Environment.GetEnvironmentVariable(ENV_SETTING_CHORD_NETWORK_CIDR);
 
             // make sure that the environment variable is specified, otherwise it won't work
-            if (string.IsNullOrEmpty(networkCidr)) { throw new IOException("Network CIDR environment variable is not specified! Cannot continue without it!"); }
+            if (string.IsNullOrEmpty(networkCidr)) { throw new IOException(
+                "Network CIDR environment variable is not specified! Cannot continue without it!"); }
 
             // make sure that the network CIDR mask is valid
-            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
+            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException(
+                "Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
 
             // split CIDR network mask at '/' separator
             string[] parts = networkCidr.Split('/');
@@ -100,10 +107,12 @@ namespace Chord.Config
             string networkCidr = Environment.GetEnvironmentVariable(ENV_SETTING_CHORD_NETWORK_CIDR);
 
             // make sure that the environment variable is specified, otherwise it won't work
-            if (string.IsNullOrEmpty(networkCidr)) { throw new IOException("Network CIDR environment variable is not specified! Cannot continue without it!"); }
+            if (string.IsNullOrEmpty(networkCidr)) { throw new IOException(
+                "Network CIDR environment variable is not specified! Cannot continue without it!"); }
 
             // make sure that the network CIDR mask is valid
-            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
+            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException(
+                "Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
 
             // split CIDR network mask at '/' separator
             string[] parts = networkCidr.Split('/');
@@ -134,7 +143,8 @@ namespace Chord.Config
             // TODO: check if the regex works
 
             // make sure that the mask is valid
-            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException("Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
+            if (!Regex.IsMatch(networkCidr, REGEX_NETWORK_CIDR)) { throw new ArgumentException(
+                "Invalid network cidr argument! Please only put IPv4 compatibe network CIDR masks."); }
 
             // split CIDR network mask at '/' separator
             string[] parts = networkCidr.Split('/');
