@@ -10,7 +10,7 @@ namespace Chord.Config
     /// <summary>
     /// Helper for retrieving network settings (IP address and port) of the node.
     /// </summary>
-    public static class IpSettings
+    public static class IpSettingUtils
     {
         #region Constants
 
