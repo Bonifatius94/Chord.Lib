@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Chord.Lib.Core;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Chord.Lib.Test
 {
@@ -12,6 +13,9 @@ namespace Chord.Lib.Test
 
     public class ChordNetworkSimulationTest
     {
+        private readonly ITestOutputHelper _logger;
+        public ChordNetworkSimulationTest(ITestOutputHelper logger) { _logger = logger; }
+
         [Fact]
         public void SimulateNetwork()
         {
@@ -19,6 +23,8 @@ namespace Chord.Lib.Test
             const int testNodesCount = 100;
             const int chordPort = 9876;
             const int testTimeoutSecs = 5 * 60;
+
+            _logger.WriteLine($"Simulating a chord network with { testNodesCount } nodes, timeout={ testTimeoutSecs }s");
 
             // define a lookup cache for the nodes to be simulated
             IDictionary<long, ChordNode> simulatedNodes = null;
@@ -34,6 +40,8 @@ namespace Chord.Lib.Test
             simulatedNodes = Enumerable.Range(1, testNodesCount)
                 .Select(x => new ChordNode(sendMessageFunc, $"10.0.0.{ x }", chordPort.ToString()))
                 .ToDictionary(x => x.NodeId);
+
+            _logger.WriteLine("Successfully created nodes. Starting node join procedures.");
 
             // connect the chord nodes to a self-organized cluster by simulating
             // something like e.g. a Kubernetes rollout of several chord instances
@@ -55,9 +63,9 @@ namespace Chord.Lib.Test
                         Task.Delay(5000).Wait();
 
                         // log the episode's system status
-                        Console.WriteLine("==================================");
-                        Console.WriteLine($"System state after { ++i } seconds:");
-                        Console.WriteLine(string.Join("\n", joinTasks.Select(task => $"task { task.Id }: { task.Status }")));
+                        _logger.WriteLine("==================================");
+                        _logger.WriteLine($"System state after { ++i } seconds:");
+                        _logger.WriteLine(string.Join("\n", joinTasks.Select(task => $"task { task.Id }: { task.Status }")));
                     }
 
                     Task.WaitAll(joinTasks);
@@ -67,6 +75,8 @@ namespace Chord.Lib.Test
             // abort the simulation on timeout if needed -> unit test failed
             bool allTasksComplete = Task.WhenAny(timeoutTask, monitorTask) != timeoutTask;
             Assert.True(allTasksComplete);
+
+            _logger.WriteLine("Successfully joined all nodes to the chord network.");
 
             // TODO: evaluate the network structure by some graph analysis
 
