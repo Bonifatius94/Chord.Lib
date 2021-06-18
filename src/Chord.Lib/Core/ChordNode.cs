@@ -11,6 +11,76 @@ namespace Chord.Lib.Core
     using MessageCallback = System.Func<IChordRequestMessage, IChordEndpoint, Task<IChordResponseMessage>>;
 
     /// <summary>
+    /// Representing all functions and attributes of a logical chord node.
+    /// </summary>
+    public interface IChordNode
+    {
+        /// <summary>
+        /// The chord node's id.
+        /// </summary>
+        long NodeId { get; }
+
+        /// <summary>
+        /// The chord node's local endpoint.
+        /// </summary>
+        IChordEndpoint Local { get; }
+
+        /// <summary>
+        /// The chord node's successor node endpoint.
+        /// </summary>
+        IChordEndpoint Successor { get; }
+
+        /// <summary>
+        /// The chord node's predecessor node endpoint.
+        /// </summary>
+        IChordEndpoint Predecessor { get; }
+
+        /// <summary>
+        /// The chord node's finger table used for routing.
+        /// </summary>
+        IDictionary<long, IChordEndpoint> FingerTable { get; }
+
+        /// <summary>
+        /// Create a new chord endpoint and join it to the network.
+        /// </summary>
+        /// <param name="findBootstrapNode">A function searching the network for a bootstrap node.</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
+        Task JoinNetwork(Func<Task<IChordEndpoint>> findBootstrapNode);
+
+        /// <summary>
+        /// Shut down this chord endpoint by leaving the network gracefully.
+        /// </summary>
+        /// <returns>a task handle to be awaited asynchronously</returns>
+        Task LeaveNetwork();
+
+        /// <summary>
+        /// Look up the chord node responsible for the given key.
+        /// </summary>
+        /// <param name="key">The key to be looked up.</param>
+        /// <param name="explicitReceiver">An explicit receiver to send the request to (optional).</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
+        Task<IChordEndpoint> LookupKey(long key, IChordEndpoint explicitReceiver=null);
+
+        /// <summary>
+        /// Check the health status of the given target chord endpoint.
+        /// </summary>
+        /// <param name="target">The endpoint to check the health of.</param>
+        /// <param name="timeoutInSecs">The timeout seconds to be waited for a response (default: 10s).</param>
+        /// <param name="failStatus">The default status when the check times out (default: questionable).</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
+        Task<ChordHealthStatus> CheckHealth(
+            IChordEndpoint target, int timeoutInSecs=10,
+            ChordHealthStatus failStatus=ChordHealthStatus.Questionable);
+
+        /// <summary>
+        /// Process the given chord request the local endpoint just received.
+        /// </summary>
+        /// <param name="request">The chord request to be processed.</param>
+        /// <returns>a task handle to be awaited asynchronously</returns>
+        Task<IChordResponseMessage> ProcessRequest(IChordRequestMessage request);
+    }
+
+    /// <summary>
     /// This class provides all core functionality of the chord protocol.
     /// 
     /// Note that this is supposed to be a logical chord endpoint abstracting
@@ -18,26 +88,41 @@ namespace Chord.Lib.Core
     /// you need to provide a callback function for exchanging messages
     /// between chord endpoints, etc. (see constructor).
     /// </summary>
-    public class ChordNode
+    public class ChordNode : IChordNode
     {
         /// <summary>
         /// Create a new chord node with the given request callback, upper resource id bound and timeout configuration.
         /// </summary>
         /// <param name="sendRequest">The callback function for sending requests to other chord nodes.</param>
+        /// <param name="ipAddress">The local endpoint's IP address.</param>
+        /// <param name="chordPort">The local endpoint's chord port.</param>
         /// <param name="maxId">The max. resource id to be addressed (default: 2^63-1).</param>
         /// <param name="monitorHealthSchedule">The delay in seconds between health monitoring tasks (default: 5 minutes).</param>
         /// <param name="updateTableSchedule">The delay in seconds between finger table update tasks (default: 5 minutes).</param>
-        public ChordNode(MessageCallback sendRequest, long maxId=long.MaxValue, 
-            int monitorHealthSchedule=600, int updateTableSchedule=600)
+        public ChordNode(MessageCallback sendRequest, string ipAddress, string chordPort,
+            long maxId=long.MaxValue, int monitorHealthSchedule=600, int updateTableSchedule=600)
         {
             this.sendRequest = sendRequest;
             this.maxId = maxId;
             this.monitorHealthSchedule = monitorHealthSchedule;
             this.updateTableSchedule = updateTableSchedule;
+
+            this.local = new ChordEndpoint() {
+                NodeId = getRandId(),
+                IpAddress = ipAddress,
+                Port = chordPort,
+                State = ChordHealthStatus.Starting
+            };
         }
 
-        private MessageCallback sendRequest;
+        public long NodeId => local.NodeId;
+        public IChordEndpoint Local => local;
+        public IChordEndpoint Successor => successor;
+        public IChordEndpoint Predecessor => predecessor;
+        public IDictionary<long, IChordEndpoint> FingerTable => fingerTable;
+
         private long maxId;
+        private MessageCallback sendRequest;
         private int monitorHealthSchedule;
         private int updateTableSchedule;
 
@@ -52,24 +137,18 @@ namespace Chord.Lib.Core
 
         #region Chord Client
 
-        /// <summary>
-        /// Create a new chord endpoint and join it to the network.
-        /// </summary>
-        /// <param name="bootstrap">The entrypoint to issue the first lookup request to.</param>
-        /// <param name="ipAddress">The local endpoint's IP address.</param>
-        /// <param name="port">The local endpoint's port.</param>
-        /// <returns>a task handle to be awaited asynchronously</returns>
-        public async Task JoinNetwork(IChordEndpoint bootstrap,
-            string ipAddress, string port)
+        public async Task JoinNetwork(Func<Task<IChordEndpoint>> findBootstrapNode)
         {
+            // phase 0: find an entrypoint into the chord network
+
+            var bootstrap = await findBootstrapNode();
+            if (bootstrap == null) { throw new InvalidOperationException(
+                "Cannot find a bootstrap node! Please try to join again!"); }
+
             // phase 1: determine the successor by a key lookup
 
-            local = new ChordEndpoint() {
-                NodeId = local.NodeId,
-                State = ChordHealthStatus.Idle,
-                IpAddress = ipAddress,
-                Port = port
-            };
+            if (local.State != ChordHealthStatus.Starting) { throw new InvalidOperationException(
+                "Cannot join cluster! Make sure the node is in 'Starting' state!"); }
 
             do {
 
@@ -164,10 +243,6 @@ namespace Chord.Lib.Core
             });
         }
 
-        /// <summary>
-        /// Shut down this chord endpoint by leaving the network gracefully.
-        /// </summary>
-        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task LeaveNetwork()
         {
             // phase 1: initiate the leave process
@@ -215,12 +290,6 @@ namespace Chord.Lib.Core
             backgroundTaskCallback.Cancel();
         }
 
-        /// <summary>
-        /// Look up the chord node responsible for the given key.
-        /// </summary>
-        /// <param name="key">The key to be looked up.</param>
-        /// <param name="explicitReceiver">An explicit receiver to send the request to (optional).</param>
-        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task<IChordEndpoint> LookupKey(
             long key, IChordEndpoint explicitReceiver=null)
         {
@@ -241,13 +310,6 @@ namespace Chord.Lib.Core
             return response.Responder;
         }
 
-        /// <summary>
-        /// Check the health status of the given target chord endpoint.
-        /// </summary>
-        /// <param name="target">The endpoint to check the health of.</param>
-        /// <param name="timeoutInSecs">The timeout seconds to be waited for a response (default: 10s).</param>
-        /// <param name="failStatus">The default status when the check times out (default: questionable).</param>
-        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task<ChordHealthStatus> CheckHealth(
             IChordEndpoint target, int timeoutInSecs=10,
             ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
@@ -330,6 +392,12 @@ namespace Chord.Lib.Core
             // switch out the currently active finger table
             fingerTable = newTable;
 
+            // TODO: add a procedure scanning for the entire network to fix
+            //       cluster states with multiple unconnected sub-clusters
+            //       implementing this cost-efficient could be done by scanning
+            //       a few physically neighboured IPs addresses with each node
+            //       to initiate chord ring fusions
+
             // TODO: leave critical section (mutex)
         }
 
@@ -337,11 +405,6 @@ namespace Chord.Lib.Core
 
         #region Chord Server
 
-        /// <summary>
-        /// Process the given chord request the local endpoint just received.
-        /// </summary>
-        /// <param name="request">The chord request to be processed.</param>
-        /// <returns>a task handle to be awaited asynchronously</returns>
         public async Task<IChordResponseMessage> ProcessRequest(
             IChordRequestMessage request)
         {
@@ -376,6 +439,14 @@ namespace Chord.Lib.Core
         private async Task<IChordResponseMessage> processKeyLookup(
             IChordRequestMessage request)
         {
+            // handle the special case for being the initial node of the cluster
+            // seving the first lookup request of a node join
+            if (local.State == ChordHealthStatus.Starting)
+            {
+                // TODO: think of what else needs to be done here ...
+                return new ChordResponseMessage() { Responder = local };
+            }
+
             // perform key lookup and return the endpoint responsible for the key
             var responder = await LookupKey(request.RequestedResourceId);
             return new ChordResponseMessage() { Responder = responder };

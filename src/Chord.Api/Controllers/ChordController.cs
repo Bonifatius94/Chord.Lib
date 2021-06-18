@@ -24,10 +24,13 @@ namespace Chord.Api.Controllers
             string localIp = IpSettingUtils.GetChordIpv4Address().ToString();
             string localPort = IpSettingUtils.GetChordPort().ToString();
 
+            // define a function callback for finding bootstrap nodes
+            Func<Task<IChordEndpoint>> bootstrapFunc =
+                () => { return Task.Run(() => findBootstrapNode()); };
+
             // join the chord network using a bootstrap node
-            var bootstrap = findBootstrapNode();
-            node = new ChordNode(sendRequest);
-            node.JoinNetwork(bootstrap, localIp, localPort).Wait();
+            node = new ChordNode(sendRequest, localIp, localPort);
+            node.JoinNetwork(bootstrapFunc).Wait();
         }
 
         private static ChordNode node;
