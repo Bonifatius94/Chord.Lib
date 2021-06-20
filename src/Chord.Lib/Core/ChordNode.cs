@@ -492,7 +492,7 @@ namespace Chord.Lib.Core
                 while (true)
                 {
                     Task.Delay(50).Wait();
-                    if (!isJoinActive) {  }
+                    if (!isJoinActive) {  } // TODO: finish implementation
                 }
             }
 
