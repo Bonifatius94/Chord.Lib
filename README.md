@@ -7,6 +7,9 @@ providing services like e.g. distributed key-value stores with self-organization
 making it very durable to system downtime etc. Most importantly there is no single-point-of-failure
 by design which might be a very desirable system feature for cloud services worth exploring.
 
+## Disclaimer
+There is still WIP, so be cautious when using this code as it might not work properly yet.
+
 ## Chord Fundamentals
 The Chord system organizes a distributed service as a peer-to-peer network consisting of
 multiple independently acting service instances, called nodes. Those nodes are created
@@ -100,9 +103,6 @@ This should allow to attach the Chord protocol to basically any existing single-
 For demonstration purposes there is a very simple key-value store service using the Chord library.
 Those dockerized service nodes can be deployed e.g. as a Kubernetes load-balanced service
 like already described in the last section.
-
-## Disclaimer
-There is still WIP, so be cautious when using this code as it might not work properly yet.
 
 ## License
 This project is available under the terms of the MIT license.
