@@ -7,19 +7,28 @@ namespace Chord.Lib.Test.ChordKeyTest;
 
 public class EqualityTest
 {
-    [Fact]
-    public void Test_ShouldBeEqual_WhenIdsAreTheSame()
+    [Theory]
+    [InlineData(10, 10, 20)]
+    [InlineData(10, 30, 20)]
+    [InlineData(10, -10, 20)]
+    public void Test_KeysShouldBeEqual_WhenIdsAreTheSameModulIdentity(
+        int id1, int id2, int modul)
     {
-        var key1 = new ChordKey(10, 20);
-        var key2 = new ChordKey(10, 20);
+        var key1 = new ChordKey(id1, modul);
+        var key2 = new ChordKey(id2, modul);
         key1.Should().BeEquivalentTo(key2);
     }
 
-    [Fact]
-    public void Test_KeysShouldEqual_WhenIdsAreTheSame()
+    [Theory]
+    [InlineData(10, 0, 20)]
+    [InlineData(10, 31, 20)]
+    [InlineData(10, -9, 20)]
+    public void Test_KeysShouldNotBeEqual_WhenIdsAreNotTheSameModulIdentity(
+        int id1, int id2, int modul
+    )
     {
-        var key1 = new ChordKey(10, 20);
-        var key2 = new ChordKey(9, 20);
+        var key1 = new ChordKey(id1, modul);
+        var key2 = new ChordKey(id2, modul);
         key1.Should().NotBeEquivalentTo(key2);
     }
 }

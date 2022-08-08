@@ -25,7 +25,7 @@ public readonly struct ChordKey
 
     public ChordKey(BigInteger id, BigInteger maxId)
     {
-        Id = id;
+        Id = restMod(id, maxId);
         this.maxId = maxId;
     }
 
