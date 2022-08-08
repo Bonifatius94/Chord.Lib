@@ -101,7 +101,7 @@ public class HealthCheckRequestProcessor : IChordRequestProcessor
     private readonly IChordNode node;
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
-        => new ChordResponseMessage() { Responder = node.Local };
+        => await Task.FromResult(new ChordResponseMessage() { Responder = node.Local });
 }
 
 public class InitNodeJoinRequestProcessor : IChordRequestProcessor
@@ -120,10 +120,10 @@ public class InitNodeJoinRequestProcessor : IChordRequestProcessor
         // currently nothing to do here ...
         // TODO: trigger copy process for payload data transmission
 
-        return new ChordResponseMessage() {
+        return await Task.FromResult(new ChordResponseMessage() {
             Responder = node.Local,
             ReadyForDataCopy = true
-        };
+        });
     }
 }
 
@@ -177,10 +177,10 @@ public class InitNodeLeaveRequestProcessor : IChordRequestProcessor
 
         // currently nothing to do here ...
 
-        return new ChordResponseMessage() {
+        return await Task.FromResult(new ChordResponseMessage() {
             Responder = node.Local,
             ReadyForDataCopy = true
-        };
+        });
     }
 }
 
