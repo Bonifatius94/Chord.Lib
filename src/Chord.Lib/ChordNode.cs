@@ -64,6 +64,10 @@ public class ChordNode : IChordNode
     public void UpdateSuccessor(IChordEndpoint newSuccessor)
         => Successor = newSuccessor;
 
+    public async Task<IChordResponseMessage> ProcessRequest(
+            IChordRequestMessage request)
+        => await requestProcessor.ProcessAsync(request);
+
     public async Task JoinNetwork(Func<Task<IChordEndpoint>> findBootstrapNode)
     {
         // phase 0: find an entrypoint into the chord network
@@ -138,7 +142,7 @@ public class ChordNode : IChordNode
 
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
-        createBackgroundTasks(backgroundTaskCallback.Token);
+        createBackgroundTasks(backgroundTaskCallback.Token).Start();
     }
 
     private async Task createBackgroundTasks(CancellationToken token)
@@ -261,8 +265,6 @@ public class ChordNode : IChordNode
 
     private void monitorFingerHealth(CancellationToken token)
     {
-        // TODO: enter critical section (mutex)
-
         const int healthCheckTimeout = 10; // TODO: parameterize the delay by configuration
         var cachedFingers = FingerTable.AllFingers.ToList();
 
@@ -275,8 +277,6 @@ public class ChordNode : IChordNode
             .Where(x => x.State == ChordHealthStatus.Questionable).ToList();
         updateHealth(questionableFingers, healthCheckTimeout / 2, ChordHealthStatus.Dead);
         if (token.IsCancellationRequested) { return; } // TODO: release mutex
-
-        // TODO: exit critical section (mutex)
     }
 
     private void updateHealth(List<IChordEndpoint> fingers, int timeoutSecs, 
@@ -297,8 +297,4 @@ public class ChordNode : IChordNode
         // update finger states
         fingers.ForEach(finger => finger.State = healthStates[finger.NodeId]);
     }
-
-    public async Task<IChordResponseMessage> ProcessRequest(
-            IChordRequestMessage request)
-        => await requestProcessor.ProcessAsync(request);
 }
