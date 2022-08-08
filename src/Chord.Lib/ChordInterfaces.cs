@@ -71,32 +71,30 @@ public interface IChordBootstrapper
 
 public interface IIpSettings
 {
-    // TODO: think of transforming all parameterless functions into getters
-
     /// <summary>
     /// Retrieve the chord node's IP address associated with the chord network's CIDR.
     /// (default: IP address from the first non-localhost notwork interface detected)
     /// </summary>
     /// <returns>the IP address specified in settings</returns>
-    IPAddress GetChordIpv4Address();
+    IPAddress ChordIpv4Address { get; }
 
     /// <summary>
     /// Retrieve the chord port from environment variable CHORD_PORT. (default: 9876)
     /// </summary>
     /// <returns>the network port specified in node settings as integer</returns>
-    int GetChordPort();
+    int ChordPort { get; }
 
     /// <summary>
     /// Retrieve the chord node's network ID.
     /// </summary>
     /// <returns>the IP address assiciated with the network ID</returns>
-    IPAddress GetIpv4NetworkId();
+    IPAddress Ipv4NetworkId { get; }
 
     /// <summary>
     /// Retrieve the chord node's broadcast address.
     /// </summary>
     /// <returns>the IP address assiciated with the broadcast address</returns>
-    IPAddress GetIpv4Broadcast();
+    IPAddress Ipv4Broadcast { get; }
 }
 
 /// <summary>

@@ -57,55 +57,64 @@ namespace Chord.Config
 
         #region ChordNode
 
-        public IPAddress GetChordIpv4Address()
+        public IPAddress ChordIpv4Address
         {
-            // TODO: add feature to find IP address alternatively by the docker network name
+            get
+            {
+                // TODO: add feature to find IP address alternatively by the docker network name
 
-            var ipAddresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList
-                .Where(x => x.AddressFamily == AddressFamily.InterNetwork).ToList();
+                var ipAddresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList
+                    .Where(x => x.AddressFamily == AddressFamily.InterNetwork).ToList();
 
-            var chordIpv4Address = !isCidrConfigured(networkCidr) ? ipAddresses.FirstOrDefault()
-                : ipAddresses.FirstOrDefault(address => address.IsPartOfNetwork(networkCidr));
+                var chordIpv4Address = !isCidrConfigured(networkCidr) ? ipAddresses.FirstOrDefault()
+                    : ipAddresses.FirstOrDefault(address => address.IsPartOfNetwork(networkCidr));
 
-            if (string.IsNullOrEmpty(chordIpv4Address?.ToString())) { throw new IOException(
-                "No suitable ethernet interface detected! Cannot connect to other peers!"); }
+                if (string.IsNullOrEmpty(chordIpv4Address?.ToString())) { throw new IOException(
+                    "No suitable ethernet interface detected! Cannot connect to other peers!"); }
 
-            return chordIpv4Address;
+                return chordIpv4Address;
+            }
         }
 
-        public int GetChordPort()
+        public int ChordPort
             => int.Parse(chordPort ?? CHORD_DEFAULT_PORT);
 
         #endregion ChordNode
 
         #region ChordNetwork
 
-        public IPAddress GetIpv4NetworkId()
+        public IPAddress Ipv4NetworkId
         {
-            // parse network CIDR
-            isCidrConfigured(networkCidr, (msg) => throw new ArgumentException(msg));
-            var (networkId, networkBitsCount) = splitCidr(networkCidr);
+            get
+            {
+                // parse network CIDR
+                isCidrConfigured(networkCidr, (msg) => throw new ArgumentException(msg));
+                var (networkId, networkBitsCount) = splitCidr(networkCidr);
 
-            // get numeric representation of network id, ip address and subnet mask
-            int networkIdBytes = BitConverter.ToInt32(IPAddress.Parse(networkId).GetAddressBytes(), 0);
-            int subnetMask = IPAddress.HostToNetworkOrder(-1 << (32 - networkBitsCount));
+                // get numeric representation of network id, ip address and subnet mask
+                int networkIdBytes = BitConverter.ToInt32(IPAddress.Parse(networkId).GetAddressBytes(), 0);
+                int subnetMask = IPAddress.HostToNetworkOrder(-1 << (32 - networkBitsCount));
 
-            // compute the network address bitwise and return it as IP address object
-            return new IPAddress(networkIdBytes & subnetMask);
+                // compute the network address bitwise and return it as IP address object
+                return new IPAddress(networkIdBytes & subnetMask);
+            }
         }
 
-        public IPAddress GetIpv4Broadcast()
+        public IPAddress Ipv4Broadcast
         {
-            // parse network CIDR
-            isCidrConfigured(networkCidr, (msg) => throw new ArgumentException(msg));
-            var (networkId, networkBitsCount) = splitCidr(networkCidr);
+            get
+            {
+                // parse network CIDR
+                isCidrConfigured(networkCidr, (msg) => throw new ArgumentException(msg));
+                var (networkId, networkBitsCount) = splitCidr(networkCidr);
 
-            // get numeric representation of network id and subnet mask
-            int networkIdBytes = BitConverter.ToInt32(IPAddress.Parse(networkId).GetAddressBytes(), 0);
-            int subnetMask = IPAddress.HostToNetworkOrder(-1 << (32 - networkBitsCount));
+                // get numeric representation of network id and subnet mask
+                int networkIdBytes = BitConverter.ToInt32(IPAddress.Parse(networkId).GetAddressBytes(), 0);
+                int subnetMask = IPAddress.HostToNetworkOrder(-1 << (32 - networkBitsCount));
 
-            // compute the broadcast using bitwise operations and return it as IP address object
-            return new IPAddress((networkIdBytes & subnetMask) | ~subnetMask);
+                // compute the broadcast using bitwise operations and return it as IP address object
+                return new IPAddress((networkIdBytes & subnetMask) | ~subnetMask);
+            }
         }
 
         #endregion ChordNetwork

@@ -25,22 +25,22 @@ public class IPv4VlanBootstrapper : IChordBootstrapper
         // expect something like an exclusive LAN for chord nodes
 
         // get network id and broadcast address
-        var networkId = ipConfig.GetIpv4NetworkId();
-        var broadcast = ipConfig.GetIpv4Broadcast();
+        var networkId = ipConfig.Ipv4NetworkId;
+        var broadcast = ipConfig.Ipv4Broadcast;
 
         // determine the first and last address in the address space
-        var firstIp = new BigInteger(networkId.GetAddressBytes()) + 1;
-        var lastIp = new BigInteger(broadcast.GetAddressBytes()) - 1;
+        var firstIp = new BigInteger(networkId.GetAddressBytes(), isUnsigned: true) + 1;
+        var lastIp = new BigInteger(broadcast.GetAddressBytes(), isUnsigned: true) - 1;
         return (firstIp, lastIp);
     }
 
-    // TODO: think of making this async and cancellable
     public async Task<IChordEndpoint> FindBootstrapNode(IChordRequestSender sender)
     {
         const int PING_TIMEOUT_MS = 1000;
         const int NUM_PARALLEL_PINGS = 128;
 
-        var chordPort = ipConfig.GetChordPort();
+        Func<IChordEndpoint, bool> ping = (e) => pingEndpoint(sender, e, PING_TIMEOUT_MS);
+        var chordPort = ipConfig.ChordPort;
         var (firstIp, lastIp) = getFirstAndLastAddress();
         var allEndpoints = BigIntEnumerable.Range(firstIp, lastIp)
             .Select(addr => new ChordEndpoint() {
@@ -52,8 +52,7 @@ public class IPv4VlanBootstrapper : IChordBootstrapper
         foreach (var endpointsToPing in allEndpoints.Batch(NUM_PARALLEL_PINGS))
         {
             var pingTasksByEndpoint = endpointsToPing
-                .ToDictionary(x => x, x => Task.Run(
-                    () => pingEndpoint(sender, x, PING_TIMEOUT_MS)));
+                .ToDictionary(x => x, x => Task.Run(() => ping(x)));
 
             while (pingTasksByEndpoint.Values.Any(x => x.Status == TaskStatus.Running))
             {

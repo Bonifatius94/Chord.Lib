@@ -16,8 +16,8 @@ namespace Chord.Api.Controllers
             const long MAX_ID = long.MaxValue;
 
             var nodeConfig = new ChordNodeConfiguration() {
-                IpAddress = ipConfig.GetChordIpv4Address().ToString(),
-                ChordPort = ipConfig.GetChordPort().ToString()
+                IpAddress = ipConfig.ChordIpv4Address.ToString(),
+                ChordPort = ipConfig.ChordPort.ToString()
             };
 
             var requestSender = new HttpChordRequestSender();
