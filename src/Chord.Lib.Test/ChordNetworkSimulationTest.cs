@@ -1,9 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Chord.Lib;
+using NSubstitute;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -14,7 +15,24 @@ using MessageCallback = System.Func<IChordRequestMessage, IChordEndpoint, Task<I
 public class ChordNetworkSimulationTest
 {
     private readonly ITestOutputHelper _logger;
-    public ChordNetworkSimulationTest(ITestOutputHelper logger) { _logger = logger; }
+    public ChordNetworkSimulationTest(ITestOutputHelper logger)
+    {
+        _logger = logger;
+    }
+
+    class RequestSenderMock : IChordRequestSender
+    {
+        public void RegisterNodes(IDictionary<ChordKey, ChordNode> nodes)
+            => this.nodes = new ConcurrentDictionary<ChordKey, ChordNode>(nodes);
+
+        private IDictionary<ChordKey, ChordNode> nodes =
+            new ConcurrentDictionary<ChordKey, ChordNode>();
+
+        public async Task<IChordResponseMessage> SendRequest(
+                IChordRequestMessage request, IChordEndpoint receiver)
+            => await nodes[receiver.NodeId].ProcessRequest(request);
+        // TODO: think about what happens when the receiver is not registered
+    }
 
     [Fact]
     public void SimulateNetwork()
@@ -26,20 +44,16 @@ public class ChordNetworkSimulationTest
 
         _logger.WriteLine($"Simulating a chord network with { testNodesCount } nodes, timeout={ testTimeoutSecs }s");
 
-        // define a lookup cache for the nodes to be simulated
-        IDictionary<long, ChordNode> simulatedNodes = null;
-
-        // define the message transmission function (just pass the message
-        // directly to the target node's ProcessRequest() function)
-        MessageCallback sendMessageFunc =
-            (IChordRequestMessage request, IChordEndpoint receiver) => {
-                return simulatedNodes[receiver.NodeId].ProcessRequest(request);
-            };
-
-        // create yet unconnected chord nodes
-        simulatedNodes = Enumerable.Range(1, testNodesCount)
-            .Select(x => new ChordNode(sendMessageFunc, $"10.0.0.{ x }", chordPort.ToString()))
-            .ToDictionary(x => x.NodeId);
+        // create nodes to be simulated
+        var sender = new RequestSenderMock();
+        IDictionary<ChordKey, ChordNode> simulatedNodes = simulatedNodes =
+            Enumerable.Range(1, testNodesCount)
+                .Select(x => new ChordNode(sender, new ChordNodeConfiguration() {
+                    IpAddress = $"10.0.0.{ x }",
+                    ChordPort = chordPort.ToString()
+                }))
+                .ToDictionary(x => x.NodeId);
+        sender.RegisterNodes(simulatedNodes);
 
         _logger.WriteLine("Successfully created nodes. Starting node join procedures.");
 

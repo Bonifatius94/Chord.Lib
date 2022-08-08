@@ -8,14 +8,17 @@ namespace Chord.Lib;
 
 public class ChordBootstrapper
 {
-    public ChordBootstrapper(IIpSettings ipConfig)
-       => this.ipConfig = ipConfig;
+    public ChordBootstrapper(IIpSettings ipConfig, Func<BigInteger, ChordKey> newKey)
+    {
+        this.ipConfig = ipConfig;
+        this.newKey = newKey;
+    }
 
     private readonly IIpSettings ipConfig;
+    private readonly Func<BigInteger, ChordKey> newKey;
 
     // TODO: think of making this async and cancellable
-    public IChordEndpoint FindBootstrapNode(
-        Func<IChordRequestMessage, IChordEndpoint, Task<IChordResponseMessage>> sendRequest)
+    public IChordEndpoint FindBootstrapNode(IChordRequestSender sender)
     {
         const int timeout = 10000;
 
@@ -26,7 +29,6 @@ public class ChordBootstrapper
         var networkId = ipConfig.GetIpv4NetworkId();
         var broadcast = ipConfig.GetIpv4Broadcast();
         var chordPort = ipConfig.GetChordPort();
-        // TODO: think of using ASP.NET helper functions instead
 
         // determine the first and last address in the address space
         var firstIp = new BigInteger(networkId.GetAddressBytes()) + 1;
@@ -37,17 +39,17 @@ public class ChordBootstrapper
         {
             // define the chord endpoint to be tried out
             var targetEndpoint = new ChordEndpoint() {
-                NodeId = -1,
+                NodeId = newKey(-1),
                 IpAddress = new IPAddress(addr.ToByteArray()).ToString(),
                 Port = chordPort.ToString()
             };
 
             // send chord health check requests
             var cancelCallback = new CancellationTokenSource();
-            var requestTask = Task.Run(() => sendRequest(
+            var requestTask = Task.Run(() => sender.SendRequest(
                     new ChordRequestMessage() {
                         Type = ChordRequestType.HealthCheck,
-                        RequesterId = -1
+                        RequesterId = newKey(-1)
                     },
                     targetEndpoint
                 ), cancelCallback.Token
