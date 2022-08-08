@@ -1,12 +1,12 @@
 
 # use the official Microsoft .NET 5 build image
-FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
 
 # move to the src target dir
 WORKDIR /app/src
 
 # copy the solution and project files
-ADD ./src/ChordTest.sln ./ChordTest.sln
+ADD ./src/ChordLib.sln ./ChordLib.sln
 ADD ./src/Chord.Lib/Chord.Lib.csproj ./Chord.Lib/Chord.Lib.csproj
 ADD ./src/Chord.Lib.Test/Chord.Lib.Test.csproj ./Chord.Lib.Test/Chord.Lib.Test.csproj
 ADD ./src/Chord.Config/Chord.Config.csproj ./Chord.Config/Chord.Config.csproj
@@ -26,7 +26,7 @@ RUN dotnet publish --runtime linux-x64 --configuration Release \
                    --output /app/bin/ --no-restore
 
 # define the .NET 5 runtime image
-FROM mcr.microsoft.com/dotnet/runtime:5.0
+FROM mcr.microsoft.com/dotnet/runtime:6.0
 WORKDIR /app/bin
 COPY --from=build-env /app/bin .
 
