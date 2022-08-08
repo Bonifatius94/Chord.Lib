@@ -59,10 +59,11 @@ public class ChordNetworkSimulationTest
 
         // connect the chord nodes to a self-organized cluster by simulating
         // something like e.g. a Kubernetes rollout of several chord instances
-        var bootstrap = simulatedNodes.First().Value.Local;
-        Func<Task<IChordEndpoint>> bootstrapFunc = () => { return Task.Run(() => bootstrap); };
+        var bootstrapNode = simulatedNodes.First().Value.Local;
+        var bootstrapperMock = Substitute.For<IChordBootstrapper>();
+        bootstrapperMock.FindBootstrapNode(default).ReturnsForAnyArgs(x => bootstrapNode);
         var joinTasks = simulatedNodes.Values.AsParallel()
-            .Select(x => x.JoinNetwork(bootstrapFunc)).ToArray();
+            .Select(x => x.JoinNetwork(bootstrapperMock)).ToArray();
 
         // log the system state on a regular schedule until all join tasks completed
         // abort after several minutes if the tasks did not finish until then -> unit test failed
