@@ -14,10 +14,11 @@ public readonly struct ChordKey
         => PickRandom(long.MaxValue);
 
     public static ChordKey PickRandom(BigInteger maxId)
-        => new ChordKey(
-            id: ((long)rng.Next(int.MinValue, int.MaxValue) << 32)
-            | (long)(uint)rng.Next(int.MinValue, int.MaxValue),
-            maxId: maxId);
+    {
+        var newId = restMod(((long)rng.Next(int.MinValue, int.MaxValue) << 31)
+            | (long)(uint)rng.Next(int.MinValue, int.MaxValue), maxId);
+        return new ChordKey(newId, maxId);
+    }
 
     public ChordKey(long id, BigInteger maxId)
         : this(new BigInteger(id), maxId) {}
@@ -60,7 +61,7 @@ public readonly struct ChordKey
     public override bool Equals([NotNullWhen(true)] object obj)
         => obj?.GetType() == typeof(ChordKey) && ((ChordKey)obj).Id == Id;
 
-    public override int GetHashCode() => (int)Id;
+    public override int GetHashCode() => (int)(Id % int.MaxValue);
 
     #endregion Comparison
 }
