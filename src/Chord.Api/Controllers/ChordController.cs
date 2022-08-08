@@ -15,23 +15,17 @@ namespace Chord.Api.Controllers
         {
             const long MAX_ID = long.MaxValue;
 
+            var nodeConfig = new ChordNodeConfiguration() {
+                IpAddress = ipConfig.GetChordIpv4Address().ToString(),
+                ChordPort = ipConfig.GetChordPort().ToString()
+            };
+
             var requestSender = new HttpChordRequestSender();
-            Func<IChordRequestMessage, IChordEndpoint, Task<IChordResponseMessage>> sendRequest =
-                (request, endpoint) => requestSender.SendRequest(request, endpoint);
+            var bootstrapper = new IPv4VlanBootstrapper(
+                ipConfig, (key) => new ChordKey(key, MAX_ID));
 
-            // define a function callback for finding bootstrap nodes
-            var bootstrapper = new ChordBootstrapper(ipConfig, (key) => new ChordKey(key, MAX_ID));
-            Func<Task<IChordEndpoint>> bootstrapFunc =
-                () => Task.Run(() => bootstrapper.FindBootstrapNode(requestSender));
-
-            // join the chord network using a bootstrap node
-            string localIp = ipConfig.GetChordIpv4Address().ToString();
-            string localPort = ipConfig.GetChordPort().ToString();
-            node = new ChordNode(requestSender, new ChordNodeConfiguration() {
-                IpAddress = localIp,
-                ChordPort = localPort
-            });
-            node.JoinNetwork(bootstrapFunc).Wait();
+            node = new ChordNode(requestSender, nodeConfig);
+            node.JoinNetwork(bootstrapper).Wait();
         }
 
         private static ChordNode node;

@@ -68,11 +68,11 @@ public class ChordNode : IChordNode
             IChordRequestMessage request)
         => await requestProcessor.ProcessAsync(request);
 
-    public async Task JoinNetwork(Func<Task<IChordEndpoint>> findBootstrapNode)
+    public async Task JoinNetwork(IChordBootstrapper bootstrapper)
     {
         // phase 0: find an entrypoint into the chord network
 
-        var bootstrap = await findBootstrapNode();
+        var bootstrap = await bootstrapper.FindBootstrapNode(sender);
         if (bootstrap == null) { throw new InvalidOperationException(
             "Cannot find a bootstrap node! Please try to join again!"); }
 

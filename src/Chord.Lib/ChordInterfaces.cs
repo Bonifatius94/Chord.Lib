@@ -64,6 +64,11 @@ public interface IChordRequestSender
         IChordRequestMessage request, IChordEndpoint receiver);
 }
 
+public interface IChordBootstrapper
+{
+    Task<IChordEndpoint> FindBootstrapNode(IChordRequestSender sender);
+}
+
 public interface IIpSettings
 {
     // TODO: think of transforming all parameterless functions into getters
@@ -127,9 +132,9 @@ public interface IChordNode
     /// <summary>
     /// Create a new chord endpoint and join it to the network.
     /// </summary>
-    /// <param name="findBootstrapNode">A function searching the network for a bootstrap node.</param>
+    /// <param name="bootstrapper">A bootstrap procedure provider.</param>
     /// <returns>a task handle to be awaited asynchronously</returns>
-    Task JoinNetwork(Func<Task<IChordEndpoint>> findBootstrapNode);
+    Task JoinNetwork(IChordBootstrapper bootstrapper);
 
     /// <summary>
     /// Shut down this chord endpoint by leaving the network gracefully.
