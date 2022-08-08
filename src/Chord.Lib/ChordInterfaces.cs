@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace Chord.Lib;
@@ -27,7 +28,7 @@ public enum ChordHealthStatus
 public interface IChordEndpoint
 {
     // summary of remote node features
-    long NodeId { get; set; }
+    ChordKey NodeId { get; set; }
     string IpAddress { get; set; }
     string Port { get; set; }
     ChordHealthStatus State { get; set; }
@@ -37,8 +38,8 @@ public interface IChordRequestMessage
 {
     // core message features
     ChordRequestType Type { get; set; }
-    long RequesterId { get; set; }
-    long RequestedResourceId { get; set; }
+    ChordKey RequesterId { get; set; }
+    ChordKey RequestedResourceId { get; set; }
 
     // additional message features for the join/leave procedure
     IChordEndpoint NewSuccessor { get; set; }
@@ -63,6 +64,36 @@ public interface IChordRequestSender
         IChordRequestMessage request, IChordEndpoint receiver);
 }
 
+public interface IIpSettings
+{
+    // TODO: think of transforming all parameterless functions into getters
+
+    /// <summary>
+    /// Retrieve the chord node's IP address associated with the chord network's CIDR.
+    /// (default: IP address from the first non-localhost notwork interface detected)
+    /// </summary>
+    /// <returns>the IP address specified in settings</returns>
+    IPAddress GetChordIpv4Address();
+
+    /// <summary>
+    /// Retrieve the chord port from environment variable CHORD_PORT. (default: 9876)
+    /// </summary>
+    /// <returns>the network port specified in node settings as integer</returns>
+    int GetChordPort();
+
+    /// <summary>
+    /// Retrieve the chord node's network ID.
+    /// </summary>
+    /// <returns>the IP address assiciated with the network ID</returns>
+    IPAddress GetIpv4NetworkId();
+
+    /// <summary>
+    /// Retrieve the chord node's broadcast address.
+    /// </summary>
+    /// <returns>the IP address assiciated with the broadcast address</returns>
+    IPAddress GetIpv4Broadcast();
+}
+
 /// <summary>
 /// Representing all functions and attributes of a logical chord node.
 /// </summary>
@@ -71,7 +102,7 @@ public interface IChordNode
     /// <summary>
     /// The chord node's id.
     /// </summary>
-    long NodeId { get; }
+    ChordKey NodeId { get; }
 
     /// <summary>
     /// The chord node's local endpoint.
@@ -91,7 +122,7 @@ public interface IChordNode
     /// <summary>
     /// The chord node's finger table used for routing.
     /// </summary>
-    IDictionary<long, IChordEndpoint> FingerTable { get; }
+    ChordFingerTable FingerTable { get; }
 
     /// <summary>
     /// Create a new chord endpoint and join it to the network.
@@ -112,7 +143,7 @@ public interface IChordNode
     /// <param name="key">The key to be looked up.</param>
     /// <param name="explicitReceiver">An explicit receiver to send the request to (optional).</param>
     /// <returns>a task handle to be awaited asynchronously</returns>
-    Task<IChordEndpoint> LookupKey(long key, IChordEndpoint explicitReceiver=null);
+    Task<IChordEndpoint> LookupKey(ChordKey key, IChordEndpoint explicitReceiver=null);
 
     /// <summary>
     /// Check the health status of the given target chord endpoint.
@@ -131,4 +162,10 @@ public interface IChordNode
     /// <param name="request">The chord request to be processed.</param>
     /// <returns>a task handle to be awaited asynchronously</returns>
     Task<IChordResponseMessage> ProcessRequest(IChordRequestMessage request);
+
+    /// <summary>
+    /// Notify the Chord node that it's successor changed.
+    /// </summary>
+    /// <param name="newSuccessor">The new successor of the node.</param>
+    void UpdateSuccessor(IChordEndpoint newSuccessor);
 }

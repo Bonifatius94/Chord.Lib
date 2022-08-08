@@ -6,8 +6,8 @@ public class ChordRequestMessage : IChordRequestMessage
 {
     // core request message features
     public ChordRequestType Type { get; set; }
-    public long RequesterId { get; set; }
-    public long RequestedResourceId { get; set; }
+    public ChordKey RequesterId { get; set; }
+    public ChordKey RequestedResourceId { get; set; }
 
     // additional message features for the join/leave procedure
     public IChordEndpoint NewSuccessor { get; set; }
