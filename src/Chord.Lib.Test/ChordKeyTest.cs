@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using FluentAssertions;
 using Xunit;
 
@@ -7,12 +9,26 @@ namespace Chord.Lib.Test.ChordKeyTest;
 
 public class EqualityTest
 {
+    public static IEnumerable<object[]> equalIds =
+        new List<object[]> {
+            new object[] { new BigInteger(10), new BigInteger(10), new BigInteger(20) },
+            new object[] { new BigInteger(10), new BigInteger(30), new BigInteger(20) },
+            new object[] { new BigInteger(10), new BigInteger(-10), new BigInteger(20) },
+            new object[] { new BigInteger(0L), new BigInteger(long.MaxValue), new BigInteger(long.MaxValue) },
+        };
+
+    public static IEnumerable<object[]> unequalIds =
+        new List<object[]> {
+            new object[] { new BigInteger(10), new BigInteger(0), new BigInteger(20) },
+            new object[] { new BigInteger(10), new BigInteger(31), new BigInteger(20) },
+            new object[] { new BigInteger(10), new BigInteger(-9), new BigInteger(20) },
+            new object[] { new BigInteger(1ul), new BigInteger(1ul << 63), new BigInteger(1ul << 62) },
+        };
+
     [Theory]
-    [InlineData(10, 10, 20)]
-    [InlineData(10, 30, 20)]
-    [InlineData(10, -10, 20)]
+    [MemberData(nameof(equalIds))]
     public void Test_KeysShouldBeEqual_WhenIdsAreTheSameModulIdentity(
-        int id1, int id2, int modul)
+        BigInteger id1, BigInteger id2, BigInteger modul)
     {
         var key1 = new ChordKey(id1, modul);
         var key2 = new ChordKey(id2, modul);
@@ -20,11 +36,9 @@ public class EqualityTest
     }
 
     [Theory]
-    [InlineData(10, 0, 20)]
-    [InlineData(10, 31, 20)]
-    [InlineData(10, -9, 20)]
+    [MemberData(nameof(unequalIds))]
     public void Test_KeysShouldNotBeEqual_WhenIdsAreNotTheSameModulIdentity(
-        int id1, int id2, int modul
+        BigInteger id1, BigInteger id2, BigInteger modul
     )
     {
         var key1 = new ChordKey(id1, modul);
@@ -35,6 +49,8 @@ public class EqualityTest
 
 public class AddSubTest
 {
+    // TODO: add test cases with ids > 2^64
+
     [Fact]
     public void Test_ShouldAddNormal_WhenNoModulOverflow()
     {
@@ -77,7 +93,7 @@ public class PickRandomTest
     [Fact]
     public void Test_ShouldProduceDifferentKeys_WhenCreatingRange()
     {
-        const long KEY_SPACE = long.MaxValue;
+        const ulong KEY_SPACE = ulong.MaxValue;
         var keys = Enumerable.Range(0, 10000)
             .Select(x => ChordKey.PickRandom()).ToList();
         keys.Distinct().Should().HaveCount(keys.Count());
