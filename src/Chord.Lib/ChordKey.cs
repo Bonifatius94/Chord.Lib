@@ -8,7 +8,7 @@ namespace Chord.Lib;
 /// An immutable BigInteger key implementation supporting
 /// the residue field arithmetics required for Chord.
 /// </summary>
-public readonly struct ChordKey
+public readonly struct ChordKey : IComparable
 {
     #region Init
 
@@ -81,5 +81,16 @@ public readonly struct ChordKey
 
     public override int GetHashCode() => 0;
 
+    public int CompareTo(object obj)
+    {
+        if ((obj?.GetType() == typeof(ChordKey)) != true)
+            throw new ArgumentException("Can only compare to other chord keys!");
+
+        var otherKey = (ChordKey)obj;
+        return this < otherKey ? -1 : (this > otherKey ? 1 : 0);
+    }
+
     #endregion Comparison
+
+    public override string ToString() => $"{Id}";
 }
