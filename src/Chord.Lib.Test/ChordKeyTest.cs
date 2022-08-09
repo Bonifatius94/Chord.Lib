@@ -90,32 +90,40 @@ public class AddSubTest
 
 public class PickRandomTest
 {
-    [Fact]
-    public void Test_ShouldProduceDifferentKeys_WhenCreatingRange()
-    {
-        const ulong KEY_SPACE = ulong.MaxValue;
-        var keys = Enumerable.Range(0, 10000)
-            .Select(x => ChordKey.PickRandom()).ToList();
-        keys.Distinct().Should().HaveCount(keys.Count());
-        keys.Should().Match(x => x.All(key => key.Id >= 0 && key.Id < KEY_SPACE));
-    }
+    public static IEnumerable<object[]> keySpaces =
+        new List<object[]> {
+            new object[] { new BigInteger(10) },
+            new object[] { new BigInteger(ulong.MaxValue) },
+            new object[] { new BigInteger(1) << 121 },
+        };
 
-    [Fact]
-    public void Test_ShouldProduceEqualDistKeys_WhenCreatingRange()
+    [Theory]
+    [MemberData(nameof(keySpaces))]
+    public void Test_ShouldProduceEquallyDistributedKeysWithinBounds_WhenCreatingRange(
+        BigInteger keySpace)
     {
-        const int KEY_SPACE = 1000;
-        const int TOTAL_KEYS = 100000;
+        const int TOTAL_KEYS = 10000;
 
         var keys = Enumerable.Range(0, TOTAL_KEYS)
-            .Select(x => ChordKey.PickRandom(KEY_SPACE)).ToList();
+            .Select(x => ChordKey.PickRandom(keySpace)).ToList();
 
         double entropy = keys
             .GroupBy(x => x)
             .ToDictionary(x => x.Key, x => (double)x.Count() / TOTAL_KEYS)
-            .Select(x => - x.Value * Math.Log(x.Value, KEY_SPACE))
+            .Select(x => - x.Value * BigInteger.Log((int)x.Value, (double)keySpace))
             .Sum();
 
-        keys.Should().Match(x => x.All(key => key.Id >= 0 && key.Id < KEY_SPACE));
+        keys.Should().Match(x => x.All(key => key.Id >= 0 && key.Id < keySpace));
         entropy.Should().BeGreaterThan(0.95);
+    }
+
+    [Fact]
+    public void Test_ShouldProduceBigKeysWithinBounds_WhenCreatingRange()
+    {
+        BigInteger KEY_SPACE = new BigInteger(1) << 121;
+        var keys = Enumerable.Range(0, 10000)
+            .Select(x => ChordKey.PickRandom(KEY_SPACE)).ToList();
+        keys.Should().Match(x => x.All(key => key.Id >= 0 && key.Id < KEY_SPACE));
+        keys.Should().Match(x => x.Any(key => key.Id >= new BigInteger(1) << 120));
     }
 }

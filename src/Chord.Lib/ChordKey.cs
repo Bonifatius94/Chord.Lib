@@ -15,7 +15,7 @@ public readonly struct ChordKey
     private static readonly Random rng = new Random();
 
     /// <summary>
-    /// Pick a random key within [0, 2^64).
+    /// Pick a random key within [0, 2^64), i.e. keySpace=2^64-1.
     /// </summary>
     /// <returns>a new key instance with random id</returns>
     public static ChordKey PickRandom()
@@ -27,12 +27,12 @@ public readonly struct ChordKey
     /// <param name="keySpace">The number of possible keys to pick from.</param>
     /// <returns>a new key instance with random id</returns>
     public static ChordKey PickRandom(BigInteger keySpace)
-    {
-        // TODO: this only produces keys within [0, 2^64) mod keySpace
-        //       -> make this really expand into the BigInteger space within [0, keySpace)
-        var newId = restMod(((ulong)rng.Next(int.MinValue, int.MaxValue) << 31)
-            | (ulong)(uint)rng.Next(int.MinValue, int.MaxValue), keySpace);
-        return new ChordKey(newId, keySpace);
+        => new ChordKey(randId(keySpace), keySpace);
+
+    private static BigInteger randId(BigInteger upperBound) {
+        var bytes = upperBound.ToByteArray();
+        rng.NextBytes(bytes);
+        return restMod(new BigInteger(bytes), upperBound);
     }
 
     /// <summary>
