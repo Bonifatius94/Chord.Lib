@@ -29,9 +29,11 @@ public interface IChordEndpoint
 {
     // summary of remote node features
     ChordKey NodeId { get; set; }
+    ChordHealthStatus State { get; set; }
+
+    // TODO: remove IP endpoint implementation details from interface
     string IpAddress { get; set; }
     string Port { get; set; }
-    ChordHealthStatus State { get; set; }
 }
 
 public interface IChordRequestMessage

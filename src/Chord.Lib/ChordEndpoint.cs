@@ -8,5 +8,7 @@ public class ChordEndpoint : IChordEndpoint
     public string Port { get; set; }
     public ChordHealthStatus State { get; set; } = ChordHealthStatus.Questionable;
 
+    public override string ToString() => $"{NodeId}";
+
     // TODO: pull some of the domain logic in here as well ...
 }
