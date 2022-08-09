@@ -41,7 +41,7 @@ public class ChordFingerTable
         => fingerTable.Values;
 
     public void InsertFinger(IChordEndpoint finger)
-        => fingerTable.Add(finger.NodeId, finger);
+        => fingerTable.TryAdd(finger.NodeId, finger);
 
     public IChordEndpoint FindBestFinger(ChordKey key, ChordKey successorKey)
     {
@@ -58,13 +58,14 @@ public class ChordFingerTable
 
     public ChordKey FindClosestPredecessor(ChordKey key)
         => fingerTable.Keys.Select(x => x + key).Max() - key;
+        // TODO: this seems to be wrong ...
 
-    public async Task UpdateTable(ChordKey nodeId, CancellationToken? token = null)
+    public async Task UpdateTable(ChordKey localId, CancellationToken? token = null)
     {
         // get the ids 2^i for i in { 0, ..., log2(maxId) - 1 } to be looked up
-        var fingerKeys = Enumerable.Range(0, (int)BigInteger.Log(maxKey, 2) - 1)
+        var fingerKeys = Enumerable.Range(1, (int)BigInteger.Log(maxKey, 2))
             .Select(i => new ChordKey(BigInteger.Pow(2, i), maxKey))
-            .Select(key => key + nodeId - nodeId)
+            .Select(key => key + localId)
             .ToList();
 
         var lookupTasks = new Task<IChordEndpoint>[0];
@@ -92,7 +93,9 @@ public class ChordFingerTable
         // responded to the lookup requests (including the successor)
         var newFingers = lookupTasks
             .Where(x => x.Status == TaskStatus.RanToCompletion)
-            .Select(x => x.Result).ToDictionary(x => x.NodeId);
+            .Select(x => x.Result)
+            .DistinctBy(x => x.NodeId)
+            .ToDictionary(x => x.NodeId);
         fingerTable = new ConcurrentDictionary<ChordKey, IChordEndpoint>(newFingers);
 
         // TODO: what about Chord ring fusions?!
