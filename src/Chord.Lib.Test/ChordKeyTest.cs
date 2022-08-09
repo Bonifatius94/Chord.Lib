@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using FluentAssertions;
+using xRetry;
 using Xunit;
 
 namespace Chord.Lib.Test.ChordKeyTest;
@@ -97,7 +98,7 @@ public class PickRandomTest
             new object[] { new BigInteger(1) << 121 },
         };
 
-    [Theory]
+    [RetryTheory(3)]
     [MemberData(nameof(keySpaces))]
     public void Test_ShouldProduceEquallyDistributedKeysWithinBounds_WhenCreatingRange(
         BigInteger keySpace)
@@ -114,7 +115,7 @@ public class PickRandomTest
             .Sum();
 
         keys.Should().Match(x => x.All(key => key.Id >= 0 && key.Id < keySpace));
-        entropy.Should().BeGreaterThan(0.95);
+        entropy.Should().BeGreaterThan(0.99);
     }
 
     [Fact]
