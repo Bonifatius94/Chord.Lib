@@ -21,8 +21,9 @@ namespace Chord.Api.Controllers
             };
 
             var requestSender = new HttpChordRequestSender();
-            var bootstrapper = new IPv4VlanBootstrapper(
+            var endpointGenerator = new IPv4EndpointGenerator(
                 ipConfig, (key) => new ChordKey(key, MAX_ID));
+            var bootstrapper = new ChordBootstrapper(endpointGenerator);
 
             node = new ChordNode(requestSender, nodeConfig);
             node.JoinNetwork(bootstrapper).Wait();

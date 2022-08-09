@@ -8,9 +8,16 @@ using System.Threading.Tasks;
 
 namespace Chord.Lib;
 
-public class IPv4VlanBootstrapper : IChordBootstrapper
+public interface IExplorableChordEndpointGenerator
 {
-    public IPv4VlanBootstrapper(IIpSettings ipConfig, Func<BigInteger, ChordKey> newKey)
+    IEnumerable<IChordEndpoint> GenerateEndpoints();
+}
+
+public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
+{
+    public IPv4EndpointGenerator(
+        IIpSettings ipConfig,
+        Func<BigInteger, ChordKey> newKey)
     {
         this.ipConfig = ipConfig;
         this.newKey = newKey;
@@ -34,12 +41,8 @@ public class IPv4VlanBootstrapper : IChordBootstrapper
         return (firstIp, lastIp);
     }
 
-    public async Task<IChordEndpoint> FindBootstrapNode(IChordRequestSender sender)
+    public IEnumerable<IChordEndpoint> GenerateEndpoints()
     {
-        const int PING_TIMEOUT_MS = 1000;
-        const int NUM_PARALLEL_PINGS = 128;
-
-        Func<IChordEndpoint, bool> ping = (e) => pingEndpoint(sender, e, PING_TIMEOUT_MS);
         var chordPort = ipConfig.ChordPort;
         var (firstIp, lastIp) = getFirstAndLastAddress();
         var allEndpoints = BigIntEnumerable.Range(firstIp, lastIp)
@@ -48,8 +51,29 @@ public class IPv4VlanBootstrapper : IChordBootstrapper
                 IpAddress = new IPAddress(addr.ToByteArray()).ToString(),
                 Port = chordPort.ToString()
             });
+        return allEndpoints;
+    }
+}
 
-        foreach (var endpointsToPing in allEndpoints.Batch(NUM_PARALLEL_PINGS))
+public class ChordBootstrapper : IChordBootstrapper
+{
+    public ChordBootstrapper(
+        IExplorableChordEndpointGenerator endpointGenerator)
+    {
+        this.endpointGenerator = endpointGenerator;
+    }
+
+    private IExplorableChordEndpointGenerator endpointGenerator;
+
+    public async Task<IChordEndpoint> FindBootstrapNode(IChordRequestSender sender)
+    {
+        const int PING_TIMEOUT_MS = 1000;
+        const int NUM_PARALLEL_PINGS = 128;
+
+        Func<IChordEndpoint, bool> ping = (e) => pingEndpoint(sender, e, PING_TIMEOUT_MS);
+        var allEndpoints = endpointGenerator.GenerateEndpoints();
+
+        foreach (var endpointsToPing in allEndpoints.Chunk(NUM_PARALLEL_PINGS))
         {
             var pingTasksByEndpoint = endpointsToPing
                 .ToDictionary(x => x, x => Task.Run(() => ping(x)));
@@ -75,10 +99,7 @@ public class IPv4VlanBootstrapper : IChordBootstrapper
         int timeoutMillis)
     {
         Action ping = () => sender.SendRequest(
-                new ChordRequestMessage() {
-                    Type = ChordRequestType.HealthCheck,
-                    RequesterId = newKey(-1)
-                },
+                new ChordRequestMessage() { Type = ChordRequestType.HealthCheck },
                 endpoint
             );
 
@@ -102,32 +123,5 @@ public static class BigIntEnumerable
     {
         for (BigInteger value = first; value <= last; value++)
             yield return value;
-    }
-}
-
-public static class BatchProcessingEx
-{
-    public static IEnumerable<IEnumerable<T>> Batch<T>(
-        this IEnumerable<T> source, int batchSize)
-    {
-        if (batchSize == 0)
-           throw new ArgumentException(
-               "Batch size must be greater than zero!");
-
-        var batch = new List<T>();
-
-        foreach (var item in source)
-        {
-            batch.Add(item);
-
-            if (batch.Count == batchSize)
-            {
-                yield return batch;
-                batch = new List<T>();
-            }
-        }
-
-        if (batch.Any())
-            yield return batch;
     }
 }
