@@ -25,14 +25,20 @@ public class ChordNodeConfiguration
 /// </summary>
 public class ChordNode : IChordNode
 {
+    #region Init
+
     /// <summary>
     /// Create a new chord node with the given request callback, upper resource id bound and timeout configuration.
     /// </summary>
     /// <param name="sender">An endpoint that's capable of sending Chord requests to other nodes.</param>
     /// <param name="config">A set of configuration settings controlling the node behavior.</param>
-    public ChordNode(IChordRequestSender sender, ChordNodeConfiguration config)
+    public ChordNode(
+        IChordClient sender,
+        IChordPayloadWorker payloadWorker,
+        ChordNodeConfiguration config)
     {
-        this.sender = sender;
+        this.sender = new ChordRequestSender(sender);
+        this.payloadWorker = payloadWorker;
         this.config = config;
 
         Local = new ChordEndpoint() {
@@ -43,16 +49,18 @@ public class ChordNode : IChordNode
         };
 
         requestProcessor = new ChordNodeRequestProcessor(this, sender);
-        FingerTable = new ChordFingerTable(
-            (x, y) => Task.FromResult((IChordEndpoint)null), config.MaxId);
+        FingerTable = new ChordFingerTable((k, t) => LookupKey(k), config.MaxId);
 
         backgroundTaskCallback = new CancellationTokenSource();
     }
 
     private readonly ChordNodeConfiguration config;
-    private readonly IChordRequestSender sender;
     private readonly ChordNodeRequestProcessor requestProcessor;
+    private readonly ChordRequestSender sender;
+    private readonly IChordPayloadWorker payloadWorker;
     private readonly CancellationTokenSource backgroundTaskCallback;
+
+    #endregion Init
 
     public IChordEndpoint Local { get; private set; }
     public IChordEndpoint Successor  { get; private set; }
@@ -62,7 +70,10 @@ public class ChordNode : IChordNode
     public ChordKey NodeId => Local.NodeId;
 
     public void UpdateSuccessor(IChordEndpoint newSuccessor)
-        => Successor = newSuccessor;
+    {
+        Successor = newSuccessor;
+        FingerTable.InsertFinger(newSuccessor);
+    }
 
     public async Task<IChordResponseMessage> ProcessRequest(
             IChordRequestMessage request)
@@ -70,80 +81,97 @@ public class ChordNode : IChordNode
 
     public async Task JoinNetwork(IChordBootstrapper bootstrapper)
     {
-        // phase 0: find an entrypoint into the chord network
+        // TODO: decouple the error handling with Action callbacks
 
-        var bootstrap = await bootstrapper.FindBootstrapNode(sender);
-        if (bootstrap == null) { throw new InvalidOperationException(
-            "Cannot find a bootstrap node! Please try to join again!"); }
+        if (Local.State != ChordHealthStatus.Starting)
+            throw new InvalidOperationException(
+                "Cannot join cluster! Make sure the node is in 'Starting' state!");
+
+        // phase 0: find an entrypoint into the chord network
+        var bootstrap = await bootstrapper.FindBootstrapNode();
+        if (bootstrap == null)
+            throw new InvalidOperationException(
+                "Cannot find a bootstrap node! Please try to join again!");
 
         // phase 1: determine the successor by a key lookup
-
-        if (Local.State != ChordHealthStatus.Starting) { throw new InvalidOperationException(
-            "Cannot join cluster! Make sure the node is in 'Starting' state!"); }
-
-        do {
-
-            Local.NodeId = ChordKey.PickRandom(config.MaxId);
-            Successor = await LookupKey(NodeId, bootstrap);
-
-        // continue until the generated node id is unique
-        } while (Successor.NodeId == NodeId);
+        var successor = await sender.IntiateSuccessor(bootstrap, Local, config.MaxId);
 
         // phase 2: initiate the join process
-
-        // send a join initiation request to the successor
-        var response = await sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.InitNodeJoin,
-                RequesterId = NodeId
-            },
-            Successor
-        );
-
-        if (!response.ReadyForDataCopy) {
-            throw new InvalidOperationException("Network join failed! Cannot copy payload data!"); }
-
-        // phase 3: copy all existing payload data this node is now responsible for
-
-        // TODO: For production use, make sure to copy payload data, too.
-        //       Keep in mind that the old successor is no more responsible for the ids
-        //       being assigned to this newly created node. So there needs to be a kind of
-        //       mechanism to copy the data first before enabling this node to avoid
-        //       temporary data unavailability.
+        var response = await sender.InitiateNetworkJoin(Local, successor);
+        if (!response.ReadyForDataCopy)
+            throw new InvalidOperationException(
+                "Network join failed! Cannot copy payload data!");
+        await payloadWorker.PreloadData(Successor);
 
         // phase 4: finalize the join process
-
-        // send a join initiation request to the successor
-        // -> the successor sends an 'update successor' request to his predecessor
-        // -> the predecessor's successor then points to this node
-        // -> from then on this node is available to other Chord nodes on the network
-        response = await sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.CommitNodeJoin,
-                RequesterId = NodeId,
-                NewSuccessor = Local
-            },
-            Successor
-        );
-
-        // make sure the successor did successfully commit the join
-        if (!response.CommitSuccessful) { throw new InvalidOperationException(
-            "Joining the network unexpectedly failed! Please try again!"); }
+        response = await sender.CommitNetworkJoin(Local, successor);
+        if (!response.CommitSuccessful)
+            throw new InvalidOperationException(
+                "Joining the network unexpectedly failed! Please try again!");
 
         // apply the node settings
+        Successor = successor;
+        FingerTable.InsertFinger(Successor);
         Predecessor = response.Predecessor;
         FingerTable = new ChordFingerTable(
             response.FingerTable.ToDictionary(x => x.NodeId),
             (k, t) => LookupKey(k), config.MaxId);
-        FingerTable.InsertFinger(Successor);
         Local.State = ChordHealthStatus.Idle;
-
-        // -> the node is now ready for use
 
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
         createBackgroundTasks(backgroundTaskCallback.Token).Start();
     }
+
+    public async Task LeaveNetwork()
+    {
+        // phase 1: initiate the leave process
+        Local.State = ChordHealthStatus.Leaving;
+
+        var response = await sender.InitiateNetworkLeave(Local, Successor);
+        if (!response.ReadyForDataCopy) {
+            throw new InvalidOperationException("Network leave failed! Cannot copy payload data!"); }
+
+        // phase 2: copy all existing payload data from this node to the successor
+        await payloadWorker.BackupData(Successor);
+
+        // phase 3: finalize the leave process
+        response = await sender.CommitNetworkLeave(Local, Successor, Predecessor);
+        if (!response.CommitSuccessful) { throw new InvalidOperationException(
+            "Leaving the network unexpectedly failed! Please try again!"); }
+        // TODO: what happens if the leave procedure fails?!
+
+        // shut down all background tasks (health monitoring and finger table updates)
+        backgroundTaskCallback.Cancel();
+    }
+
+    public async Task<IChordEndpoint> LookupKey(
+        ChordKey key, IChordEndpoint explicitReceiver=null)
+    {
+        // determine the receiver to be forwarded the lookup request to
+        var receiver = explicitReceiver
+            ?? FingerTable.FindBestFinger(key, Successor.NodeId);
+
+        var response = await sender.SearchEndpointOfKey(key, Local, receiver);
+        return response.Responder;
+    }
+
+    public async Task<ChordHealthStatus> CheckHealth(
+        IChordEndpoint target, int timeoutInSecs=10,
+        ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
+    {
+        // send a health check request
+        var cancelCallback = new CancellationTokenSource();
+        var timeoutTask = Task.Delay(timeoutInSecs * 1000);
+        var healthCheckTask = sender.HealthCheck(Local, target, cancelCallback.Token);
+
+        // return the reported health state or the fail status (timeout)
+        bool timeout = await Task.WhenAny(timeoutTask, healthCheckTask) == timeoutTask;
+        if (timeout) { cancelCallback.Cancel(); }
+        return timeout ? failStatus : healthCheckTask.Result.Responder.State;
+    }
+
+    #region BackgroundTasks
 
     private async Task createBackgroundTasks(CancellationToken token)
     {
@@ -163,7 +191,7 @@ public class ChordNode : IChordNode
             while (!token.IsCancellationRequested)
             {
                 var timeout = new CancellationTokenSource();
-                var updateTableTask = FingerTable.UpdateTable(NodeId, timeout.Token);
+                var updateTableTask = FingerTable.BuildTable(NodeId, timeout.Token);
                 var timeoutTask = Task.Delay(config.UpdateTableSchedule * 1000);
                 if (Task.WaitAny(timeoutTask, updateTableTask) == 0)
                     timeout.Cancel();
@@ -172,95 +200,6 @@ public class ChordNode : IChordNode
 
         // wait until both tasks exited gracefully by cancellation
         await Task.WhenAll(new Task[] { monitorTask, updateTableTask });
-    }
-
-    public async Task LeaveNetwork()
-    {
-        // phase 1: initiate the leave process
-
-        // send a leave initiation request to the successor
-        var response = await sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.InitNodeLeave,
-                RequesterId = NodeId
-            },
-            Successor
-        );
-
-        if (!response.ReadyForDataCopy) {
-            throw new InvalidOperationException("Network leave failed! Cannot copy payload data!"); }
-
-        // phase 2: copy all existing payload data from this node to the successor
-
-        // TODO: For production use, make sure to copy payload data, too.
-        //       Keep in mind that this node is no more responsible for the ids
-        //       being assigned to the successor. So there needs to be a kind of
-        //       mechanism to copy the data first before safely leaving without
-        //       temporary data unavailability.
-
-        // phase 3: finalize the leave process
-
-        // send a join initiation request to the successor
-        // -> the successor sends an 'update successor' request to this node's predecessor
-        // -> the predecessor's successor then points to this node's successor
-        // -> from then on this node is no more available by other Chord nodes and can leave
-        response = await sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.CommitNodeLeave,
-                RequesterId = NodeId,
-                NewPredecessor = Predecessor
-            },
-            Successor
-        );
-
-        // make sure the successor did successfully commit the join
-        if (!response.CommitSuccessful) { throw new InvalidOperationException(
-            "Leaving the network unexpectedly failed! Please try again!"); }
-
-        // shut down all background tasks (health monitoring and finger table updates)
-        backgroundTaskCallback.Cancel();
-    }
-
-    public async Task<IChordEndpoint> LookupKey(
-        ChordKey key, IChordEndpoint explicitReceiver=null)
-    {
-        // determine the receiver to be forwarded the lookup request to
-        var receiver = explicitReceiver
-            ?? FingerTable.FindBestFinger(key, Successor.NodeId);
-
-        // send a key lookup request
-        var response = await sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.KeyLookup,
-                RequesterId = NodeId,
-                RequestedResourceId = key
-            },
-            receiver
-        );
-
-        // return the node responsible for the key
-        return response.Responder;
-    }
-
-    public async Task<ChordHealthStatus> CheckHealth(
-        IChordEndpoint target, int timeoutInSecs=10,
-        ChordHealthStatus failStatus=ChordHealthStatus.Questionable)
-    {
-        // send a health check request
-        var cancelCallback = new CancellationTokenSource();
-        var timeoutTask = Task.Delay(timeoutInSecs * 1000);
-        var healthCheckTask = Task.Run(() => sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.HealthCheck,
-                RequesterId = NodeId,
-            },
-            target
-        ), cancelCallback.Token);
-
-        // return the reported health state or the fail status (timeout)
-        bool timeout = await Task.WhenAny(timeoutTask, healthCheckTask) == timeoutTask;
-        if (timeout) { cancelCallback.Cancel(); }
-        return timeout ? failStatus : healthCheckTask.Result.Responder.State;
     }
 
     private void monitorFingerHealth(CancellationToken token)
@@ -286,7 +225,7 @@ public class ChordNode : IChordNode
         var healthCheckTasks = FingerTable.AllFingers
             .Select(x => Task.Run(() => new { 
                 NodeId = x.NodeId,
-                Health=CheckHealth(x, timeoutSecs, failStatus).Result
+                Health = CheckHealth(x, timeoutSecs, failStatus).Result
             })).ToArray();
         Task.WaitAll(healthCheckTasks);
 
@@ -297,4 +236,6 @@ public class ChordNode : IChordNode
         // update finger states
         fingers.ForEach(finger => finger.State = healthStates[finger.NodeId]);
     }
+
+    #endregion BackgroundTasks
 }
