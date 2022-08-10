@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,53 +13,44 @@ public class BootstrapperTest
 {
     class RequestSenderMock : IChordClient
     {
-        public RequestSenderMock(IChordResponseMessage successResponse)
-            => this.successResponse = successResponse;
+        public RequestSenderMock(string successIp)
+            => this.successIp = successIp;
 
-        private int i = 0;
-        private IChordResponseMessage successResponse;
+        private string successIp;
 
         public async Task<IChordResponseMessage> SendRequest(
             IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token = null)
         {
-            if (++i % 244 == 0)
-                return successResponse;
+            if (receiver.IpAddress.Equals(successIp))
+                return new ChordResponseMessage() { Responder = receiver };
+
             await Task.Delay(2000);
-            return null;
+            throw new TimeoutException($"request for { receiver } timed out!");
         }
     }
 
     public BootstrapperTest()
     {
-        settingsMock = Substitute.For<IIpSettings>();
-        responseMock = Substitute.For<IChordResponseMessage>();
-        senderMock = new RequestSenderMock(responseMock);
+        ipConfigMock = Substitute.For<IIpSettings>();
     }
 
-    private IIpSettings settingsMock;
-    private IChordClient senderMock;
-    private IChordResponseMessage responseMock;
+    private IIpSettings ipConfigMock;
 
-    [Fact(Skip="come back to this test later")]
+    [Fact]
     public async Task Test_ShouldFindBootstrapNode_WhenHealthCheckSuccessful()
     {
-        settingsMock.ChordPort.Returns(9876);
-        settingsMock.IPv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
-        settingsMock.IPv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
+        ipConfigMock.ChordPort.Returns(9876);
+        ipConfigMock.IPv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
+        ipConfigMock.IPv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
 
-        responseMock.Responder = new ChordEndpoint(
-            ChordKey.PickRandom(),
-            ChordHealthStatus.Idle,
-            "192.168.178.245",
-            "9876"
-        );
+        string expBootstrapIp = "192.168.178.243";
+        var senderMock = new RequestSenderMock(expBootstrapIp);
 
         var endpointGen = new IPv4EndpointGenerator(
-            settingsMock, (k) => new ChordKey(k, 254));
+            ipConfigMock, (k) => new ChordKey(k, 254));
         var sut = new ChordBootstrapper(senderMock, endpointGen);
         var bootstrapNode = await sut.FindBootstrapNode();
 
-        bootstrapNode.NodeId.Should().Be(responseMock.Responder.NodeId);
-        bootstrapNode.State.Should().Be(responseMock.Responder.State);
+        bootstrapNode.IpAddress.Should().Be(expBootstrapIp);
     }
 }
