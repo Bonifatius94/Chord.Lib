@@ -2,7 +2,7 @@ namespace Chord.Lib;
 
 public class ChordRequestSender
 {
-    // TODO: synchronize the node state with a Actor-model event sourcing approach
+    // TODO: synchronize the node state with an Actor-model event sourcing approach
 
     public ChordRequestSender(IChordClient client)
         => this.client = client;

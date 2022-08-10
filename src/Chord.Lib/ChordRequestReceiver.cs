@@ -1,43 +1,37 @@
 namespace Chord.Lib;
 
-public interface IChordRequestReceiver
-{
-    Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request);
-}
+using ProcessRequestFunc = Func<IChordRequestMessage, Task<IChordResponseMessage>>;
 
-public class ChordNodeRequestReceiver : IChordRequestReceiver
+public class ChordNodeRequestReceiver
 {
-    // TODO: synchronize the node state with a Actor-model event sourcing approach
-    
+    // TODO: synchronize the node state with an Actor-model event sourcing approach
+
     public ChordNodeRequestReceiver(
         IChordNode node,
         IChordClient sender)
     {
-        requestProcessors = new Dictionary<ChordRequestType, IChordRequestReceiver>() {
-            { ChordRequestType.HealthCheck, new HealthCheckRequestProcessor(node) },
-            { ChordRequestType.KeyLookup, new KeyLookupRequestProcessor(node, sender) },
-            { ChordRequestType.UpdateSuccessor, new UpdateSuccessorRequestProcessor(node) },
-            { ChordRequestType.InitNodeJoin, new InitNodeJoinRequestProcessor(node) },
-            { ChordRequestType.CommitNodeJoin, new CommitNodeJoinRequestProcessor(node, sender) },
-            { ChordRequestType.InitNodeLeave, new InitNodeLeaveRequestProcessor(node) },
-            { ChordRequestType.CommitNodeLeave, new CommitNodeLeaveRequestProcessor(node, sender) },
+        this.node = node;
+        this.sender = sender;
+
+        handlers = new Dictionary<ChordRequestType, ProcessRequestFunc>() {
+            { ChordRequestType.HealthCheck, processHealthCheck },
+            { ChordRequestType.KeyLookup, processKeyLookup },
+            { ChordRequestType.UpdateSuccessor, processUpdateSuccessor },
+            { ChordRequestType.InitNodeJoin, processInitNodeJoin },
+            { ChordRequestType.CommitNodeJoin, processCommitNodeJoin },
+            { ChordRequestType.InitNodeLeave, processInitNodeLeave },
+            { ChordRequestType.CommitNodeLeave, processCommitNodeLeave },
         };
     }
 
-    private readonly Dictionary<ChordRequestType, IChordRequestReceiver> requestProcessors;
-
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
-        => await requestProcessors[request.Type].ProcessAsync(request);
-}
-
-public class UpdateSuccessorRequestProcessor : IChordRequestReceiver
-{
-    public UpdateSuccessorRequestProcessor(IChordNode node)
-        => this.node = node;
-
     private readonly IChordNode node;
+    private readonly IChordClient sender;
+    private readonly IDictionary<ChordRequestType, ProcessRequestFunc> handlers;
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
+        => await handlers[request.Type](request);
+
+    private async Task<IChordResponseMessage> processUpdateSuccessor(IChordRequestMessage request)
     {
         const int timeout = 10;
 
@@ -57,22 +51,8 @@ public class UpdateSuccessorRequestProcessor : IChordRequestReceiver
             CommitSuccessful = canUpdate
         };
     }
-}
 
-public class KeyLookupRequestProcessor : IChordRequestReceiver
-{
-    public KeyLookupRequestProcessor(
-        IChordNode node,
-        IChordClient sender)
-    {
-        this.node = node;
-        this.sender = sender;
-    }
-
-    private readonly IChordNode node;
-    private readonly IChordClient sender;
-
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processKeyLookup(IChordRequestMessage request)
     {
         // handle the special case for being the initial node of the cluster
         // seving the first lookup request of a node join
@@ -90,61 +70,20 @@ public class KeyLookupRequestProcessor : IChordRequestReceiver
 
         return new ChordResponseMessage() { Responder = responder };
     }
-}
 
-public class HealthCheckRequestProcessor : IChordRequestReceiver
-{
-    public HealthCheckRequestProcessor(IChordNode node)
-        => this.node = node;
-
-    private readonly IChordNode node;
-
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processHealthCheck(IChordRequestMessage request)
         => await Task.FromResult(new ChordResponseMessage() { Responder = node.Local });
-}
 
-public class InitNodeJoinRequestProcessor : IChordRequestReceiver
-{
-    public InitNodeJoinRequestProcessor(IChordNode node)
-        => this.node = node;
-
-    private readonly IChordNode node;
-
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processInitNodeJoin(IChordRequestMessage request)
     {
-        // prepare for a joining node as new predecessor
-        // inform the payload component that it has to send the payload
-        // data chunk to the joining node that it is now responsible for
-
-        // currently nothing to do here ...
-        // TODO: trigger copy process for payload data transmission
-
         return await Task.FromResult(new ChordResponseMessage() {
             Responder = node.Local,
             ReadyForDataCopy = true
         });
     }
-}
 
-public class CommitNodeJoinRequestProcessor : IChordRequestReceiver
-{
-    public CommitNodeJoinRequestProcessor(
-        IChordNode node,
-        IChordClient sender)
+    private async Task<IChordResponseMessage> processCommitNodeJoin(IChordRequestMessage request)
     {
-        this.node = node;
-        this.sender = sender;
-    }
-
-    private readonly IChordNode node;
-    private readonly IChordClient sender;
-
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
-    {
-        // request the prodecessor's successor to be updated to the joining node
-        // -> predecessor.successor = joining node
-        // -> this.predecessor = joining node
-
         var response = await sender.SendRequest(
             new ChordRequestMessage() {
                 Type = ChordRequestType.UpdateSuccessor,
@@ -158,45 +97,16 @@ public class CommitNodeJoinRequestProcessor : IChordRequestReceiver
             CommitSuccessful = response.CommitSuccessful
         };
     }
-}
 
-public class InitNodeLeaveRequestProcessor : IChordRequestReceiver
-{
-    public InitNodeLeaveRequestProcessor(IChordNode node)
+    private async Task<IChordResponseMessage> processInitNodeLeave(IChordRequestMessage request)
     {
-        this.node = node;
-    }
-
-    private readonly IChordNode node;
-
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
-    {
-        // prepare for the predecessor leaving the network
-        // inform the payload component that it will be sent payload data
-
-        // currently nothing to do here ...
-
         return await Task.FromResult(new ChordResponseMessage() {
             Responder = node.Local,
             ReadyForDataCopy = true
         });
     }
-}
 
-public class CommitNodeLeaveRequestProcessor : IChordRequestReceiver
-{
-    public CommitNodeLeaveRequestProcessor(
-        IChordNode node,
-        IChordClient sender)
-    {
-        this.node = node;
-        this.sender = sender;
-    }
-
-    private readonly IChordNode node;
-    private readonly IChordClient sender;
-
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processCommitNodeLeave(IChordRequestMessage request)
     {
         var response = await sender.SendRequest(
             new ChordRequestMessage() {
