@@ -23,7 +23,8 @@ public class IPv4EndpointGeneratorTest
         var gen = new IPv4EndpointGenerator(ipConfigMock, newKey);
         var endpoints = gen.GenerateEndpoints().ToList();
 
+        var actIPs = endpoints.Select(x => x.IpAddress).ToHashSet();
         var expIPs = Enumerable.Range(1, 254).Select(i => $"192.168.178.{i}").ToHashSet();
-        endpoints.Should().Match(x => x.All(x => expIPs.Contains(x.IpAddress)));
+        actIPs.Should().BeEquivalentTo(expIPs);
     }
 }
