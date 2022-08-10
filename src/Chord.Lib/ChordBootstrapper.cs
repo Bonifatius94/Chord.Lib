@@ -64,13 +64,3 @@ public class ChordBootstrapper : IChordBootstrapper
         return !ranIntoTimeout;
     }
 }
-
-public static class BigIntEnumerable
-{
-    public static IEnumerable<BigInteger> Range(
-        BigInteger first, BigInteger last)
-    {
-        for (BigInteger value = first; value <= last; value++)
-            yield return value;
-    }
-}

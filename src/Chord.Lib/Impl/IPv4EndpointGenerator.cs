@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Numerics;
-
 namespace Chord.Lib.Impl;
 
 public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
@@ -46,5 +40,15 @@ public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
                 chordPort.ToString()
             ));
         return allEndpoints;
+    }
+}
+
+public static class BigIntEnumerable
+{
+    public static IEnumerable<BigInteger> Range(
+        BigInteger first, BigInteger last)
+    {
+        for (BigInteger value = first; value <= last; value++)
+            yield return value;
     }
 }
