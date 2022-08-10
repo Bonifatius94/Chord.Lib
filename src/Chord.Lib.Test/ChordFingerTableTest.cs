@@ -43,54 +43,132 @@ public class TableCreationTest
 
         actualNormFingerIds.Should().NotBeEmpty();
         optimalNormFingerIds.Should().Match(optFingers => optFingers
-            .SkipWhile(x => x.Id <= 5 * 1000000 / NUM_NODES)
+            .SkipWhile(x => x.Id <= 5 * MAX_KEY / NUM_NODES)
             .All(opt => actualNormFingerIds
                 .Select(act => BigInteger.Abs(act.Id - opt.Id))
                 .MinBy(x => x) <= opt.Id / 2));
     }
 }
 
-// public class FingerLookupTest
-// {
-//     #region Init
+public class FingerLookupTest
+{
+    #region Init
 
-//     private async Task<ChordFingerTable> initTable(
-//         BigInteger MAX_KEY,
-//         IChordEndpoint local,
-//         IEnumerable<IChordEndpoint> networkNodes)
-//     {
-//         var fingerTable = new ChordFingerTable(
-//             (k, t) => Task.FromResult(
-//                 networkNodes.FirstOrDefault(x => x.NodeId >= k)
-//                 ?? networkNodes.ArgMin(x => x.NodeId) as IChordEndpoint),
-//             MAX_KEY);
-//         await fingerTable.BuildTable(local.NodeId);
-//         return fingerTable;
-//     }
+    private ChordFingerTable initFingerTable(
+        IList<IChordEndpoint> endpoints)
+    {
+        var local = endpoints[0];
+        var successor = endpoints[1];
 
-//     #endregion Init
+        var fingerTable = new ChordFingerTable(
+            (k, t) => Task.FromResult(
+                endpoints.MinBy(x => x.NodeId - k)),
+            local,
+            successor);
 
-//     [Fact]
-//     public async Task Test_ShouldProvideCorrectEndpoints_WhenLookingUpChordKeys()
-//     {
-//         // arrange
-//         const int MAX_KEY = 1000000;
-//         const int NUM_NODES = 1000;
-//         const int NUM_LOOKUPS = 1000;
-//         var chordNodes = Enumerable.Range(0, NUM_NODES)
-//             .Select(i => new ChordEndpoint() { NodeId = ChordKey.PickRandom(MAX_KEY) })
-//             .ToList();
-//         var (local, successor) = (chordNodes[0], chordNodes[1]);
-//         var networkNodes = chordNodes.Except(new [] { local }).ToList();
-//         var fingerTable = await initTable(MAX_KEY, local, networkNodes);
+        fingerTable.BuildTable().Wait();
+        return fingerTable;
+    }
 
-//         // act
-//         var keysToLookUp = Enumerable.Range(0, NUM_LOOKUPS)
-//             .Select(x => ChordKey.PickRandom(MAX_KEY)).ToList();
-//         var endpointOfKey = keysToLookUp
-//             .Select(k => fingerTable.FindBestFinger(k, successor.NodeId));
+    const int KeySpace = 1000000;
 
-//         // assert
+    #endregion Init
 
-//     }
-// }
+    Func<BigInteger, IChordEndpoint> endpointOfKey = (k) => new ChordEndpoint(
+            new ChordKey(k, KeySpace), ChordHealthStatus.Idle, null, null);
+
+    [Fact]
+    public void Test_ShouldFindSuccessor_WhenKeyIsBetweenLocalAndSuccessor()
+    {
+        var fingerTable = initFingerTable(
+            new List<IChordEndpoint>() {
+                endpointOfKey(1000),
+                endpointOfKey(10000),
+                endpointOfKey(100000),
+                endpointOfKey(10),
+                endpointOfKey(100),
+            }
+        );
+
+        var lookupKey = new ChordKey(1001, KeySpace);
+        var lookupResult = fingerTable.FindBestFinger(lookupKey);
+
+        lookupResult.NodeId.Should().BeEquivalentTo(new ChordKey(10000, KeySpace));
+    }
+
+    [Fact]
+    public void Test_ShouldFindSuccessor_WhenKeyIsBetweenLocalAndSuccessorWithRangeOverflow()
+    {
+        var fingerTable = initFingerTable(
+            new List<IChordEndpoint>() {
+                endpointOfKey(100000),
+                endpointOfKey(10),
+                endpointOfKey(100),
+                endpointOfKey(1000),
+                endpointOfKey(10000),
+            }
+        );
+
+        var lookupKey = new ChordKey(100001, KeySpace);
+        var lookupResult = fingerTable.FindBestFinger(lookupKey);
+
+        lookupResult.NodeId.Should().BeEquivalentTo(new ChordKey(10, KeySpace));
+    }
+
+    [Fact]
+    public void Test_ShouldFindSuccessorAsClostestPredecessor_WhenKeyIsNotBetweenLocalAndSuccessor()
+    {
+        var fingerTable = initFingerTable(
+            new List<IChordEndpoint>() {
+                endpointOfKey(1000),
+                endpointOfKey(10000),
+                endpointOfKey(100000),
+                endpointOfKey(10),
+                endpointOfKey(100),
+            }
+        );
+
+        var lookupKey = new ChordKey(10001, KeySpace);
+        var lookupResult = fingerTable.FindBestFinger(lookupKey);
+
+        lookupResult.NodeId.Should().BeEquivalentTo(new ChordKey(10000, KeySpace));
+    }
+
+    [Fact]
+    public void Test_ShouldFindClostestPredecessor_WhenKeyIsNotBetweenLocalAndSuccessor()
+    {
+        var fingerTable = initFingerTable(
+            new List<IChordEndpoint>() {
+                endpointOfKey(1000),
+                endpointOfKey(10000),
+                endpointOfKey(100000),
+                endpointOfKey(10),
+                endpointOfKey(100),
+            }
+        );
+
+        var lookupKey = new ChordKey(100001, KeySpace);
+        var lookupResult = fingerTable.FindBestFinger(lookupKey);
+
+        lookupResult.NodeId.Should().BeEquivalentTo(new ChordKey(100000, KeySpace));
+    }
+
+    [Fact]
+    public void Test_ShouldFindClostestPredecessor_WhenKeyIsNotBetweenLocalAndSuccessorWithRangeOverflow()
+    {
+        var fingerTable = initFingerTable(
+            new List<IChordEndpoint>() {
+                endpointOfKey(1000),
+                endpointOfKey(10000),
+                endpointOfKey(100000),
+                endpointOfKey(10),
+                endpointOfKey(100),
+            }
+        );
+
+        var lookupKey = new ChordKey(11, KeySpace);
+        var lookupResult = fingerTable.FindBestFinger(lookupKey);
+
+        lookupResult.NodeId.Should().BeEquivalentTo(new ChordKey(10, KeySpace));
+    }
+}

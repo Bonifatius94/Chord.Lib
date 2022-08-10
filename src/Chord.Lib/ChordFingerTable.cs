@@ -62,10 +62,14 @@ public class ChordFingerTable
     public IChordEndpoint FindBestFinger(ChordKey lookupKey)
     {
         if (!fingerTable.Any() || Successor == null)
-            return null;
+            throw new InvalidOperationException("Finger table is still uninitialized!");
 
-        return (lookupKey - Local.NodeId >= Successor.NodeId - Local.NodeId)
-            ? Successor : fingerTable.Values.MaxBy(x => x.NodeId - lookupKey);
+        if (Successor.NodeId - Local.NodeId >= lookupKey - Local.NodeId)
+            return Successor;
+
+        var closestPredecessor = fingerTable.Values.MaxBy(x => x.NodeId - lookupKey);
+        bool isSuccessorCloser = Successor.NodeId - lookupKey > closestPredecessor.NodeId - lookupKey;
+        return isSuccessorCloser ? Successor : closestPredecessor;
     }
 
     #endregion Forwarding
@@ -87,6 +91,7 @@ public class ChordFingerTable
         var newFingers = await findFingersAsync(fingerKeys, token);
         fingerTable = new ConcurrentDictionary<ChordKey, IChordEndpoint>(
             newFingers.ToDictionary(x => x.NodeId));
+        
 
         // TODO: what about Chord ring fusions?!
         //       -> re-scan the network with IExplorableEndpointProvider
@@ -125,7 +130,8 @@ public class ChordFingerTable
         return lookupTasks
             .Where(x => x.Status == TaskStatus.RanToCompletion)
             .Select(x => x.Result)
-            .DistinctBy(x => x.NodeId);
+            .DistinctBy(x => x.NodeId)
+            .ToList();
     }
 
     #endregion TableCreation
