@@ -12,6 +12,10 @@ using KeyLookupFunc = Func<ChordKey, CancellationToken, Task<IChordEndpoint>>;
 
 public class ChordFingerTable
 {
+    #region Init
+
+    // TODO: pass the local node id by constructor
+
     public ChordFingerTable(
         KeyLookupFunc lookupKeyAsync,
         BigInteger maxKey,
@@ -34,6 +38,10 @@ public class ChordFingerTable
     private readonly BigInteger maxKey;
     private readonly int updateTableTimeoutMillis;
 
+    #endregion Init
+
+    // TODO: add an attribute representing the successor endpoint (a special finger)
+
     private IDictionary<ChordKey, IChordEndpoint> fingerTable = 
         new ConcurrentDictionary<ChordKey, IChordEndpoint>();
 
@@ -42,7 +50,16 @@ public class ChordFingerTable
 
     public void InsertFinger(IChordEndpoint finger)
         => fingerTable.TryAdd(finger.NodeId, finger);
+        // TODO: think of implementing the successor as a separate attribute
 
+    #region FingerForwarding
+
+    /// <summary>
+    /// Find the chord endpoint managing the given key.
+    /// </summary>
+    /// <param name="key">The key to be looked up.</param>
+    /// <param name="successorKey">The local node's successor id.</param>
+    /// <returns></returns>
     public IChordEndpoint FindBestFinger(ChordKey key, ChordKey successorKey)
     {
         if (!fingerTable.Any())
@@ -50,20 +67,37 @@ public class ChordFingerTable
 
         // termination case: forward to the successor if it is the manager of the key
         // recursion case: forward to the closest predecessing finger of the key
+        //     -> eventually, the predecessor of the node searched is found
         var fingerKey = successorKey >= key ? successorKey
-            : FindClosestPredecessor(key);
+            : findClosestPredecessor(key);
 
+        // info: this code assumes that the successor endpoint is inserted as finger
+        // TODO: expose the special role of the successor a bit more explicitly
         return fingerTable.ContainsKey(fingerKey) ? fingerTable[fingerKey] : null;
     }
 
-    public ChordKey FindClosestPredecessor(ChordKey key)
-        => fingerTable.Keys.Select(x => x + key).Max() - key;
+    private ChordKey findClosestPredecessor(ChordKey key)
+        => fingerTable.Keys.Select(x => x - key).Max() + key;
         // TODO: this seems to be wrong ...
 
-    public async Task UpdateTable(ChordKey localId, CancellationToken? token = null)
+    #endregion FingerForwarding
+
+    #region FingerTable
+
+    /// <summary>
+    /// Scan the network for other Chord nodes managing given keys
+    /// and remember those endpoints as fingers.
+    /// 
+    /// The keys to be looked up are not follow the pattern of exponentially
+    /// growing distances between the keys up to a key roughly at the opposite
+    /// side of the chord token-ring.
+    /// </summary>
+    /// <param name="localId">The local endpoint's id.</param>
+    /// <param name="token">A cancellation token to cancel the procedure gracefully.</param>
+    public async Task BuildTable(ChordKey localId, CancellationToken? token = null)
     {
         // get the ids 2^i for i in { 0, ..., log2(maxId) - 1 } to be looked up
-        var fingerKeys = Enumerable.Range(1, (int)BigInteger.Log(maxKey, 2))
+        var fingerKeys = Enumerable.Range(0, (int)BigInteger.Log(maxKey, 2))
             .Select(i => new ChordKey(BigInteger.Pow(2, i), maxKey))
             .Select(key => key + localId)
             .ToList();
@@ -100,4 +134,6 @@ public class ChordFingerTable
 
         // TODO: what about Chord ring fusions?!
     }
+
+    #endregion FingerTable
 }
