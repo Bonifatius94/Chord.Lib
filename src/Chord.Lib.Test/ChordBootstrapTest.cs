@@ -1,5 +1,7 @@
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
+using Chord.Lib.Impl;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -8,17 +10,16 @@ namespace Chord.Lib.Test.BootstrapperTest;
 
 public class BootstrapperTest
 {
-    class RequestSenderMock : IChordRequestSender
+    class RequestSenderMock : IChordClient
     {
         public RequestSenderMock(IChordResponseMessage successResponse)
             => this.successResponse = successResponse;
-
 
         private int i = 0;
         private IChordResponseMessage successResponse;
 
         public async Task<IChordResponseMessage> SendRequest(
-            IChordRequestMessage request, IChordEndpoint receiver)
+            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token = null)
         {
             if (++i % 244 == 0)
                 return successResponse;
@@ -35,7 +36,7 @@ public class BootstrapperTest
     }
 
     private IIpSettings settingsMock;
-    private IChordRequestSender senderMock;
+    private IChordClient senderMock;
     private IChordResponseMessage responseMock;
 
     [Fact(Skip="come back to this test later")]
@@ -54,8 +55,8 @@ public class BootstrapperTest
 
         var endpointGen = new IPv4EndpointGenerator(
             settingsMock, (k) => new ChordKey(k, 254));
-        var sut = new ChordBootstrapper(endpointGen);
-        var bootstrapNode = await sut.FindBootstrapNode(senderMock);
+        var sut = new ChordBootstrapper(senderMock, endpointGen);
+        var bootstrapNode = await sut.FindBootstrapNode();
 
         bootstrapNode.NodeId.Should().Be(responseMock.Responder.NodeId);
         bootstrapNode.State.Should().Be(responseMock.Responder.State);

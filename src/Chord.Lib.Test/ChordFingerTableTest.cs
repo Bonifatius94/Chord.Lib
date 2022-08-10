@@ -52,13 +52,13 @@ public class TableCreationTest
                 networkNodes.Where(x => x.NodeId >= k).ArgMin(x => x.NodeId)
                 ?? networkNodes.ArgMin(x => x.NodeId) as IChordEndpoint),
             MAX_KEY);
-        await fingerTable.UpdateTable(local.NodeId);
+        await fingerTable.BuildTable(local.NodeId);
 
         // assert
         var actualNormFingerIds = fingerTable.AllFingers
             .Select(x => x.NodeId - local.NodeId)
             .OrderBy(x => x);
-        var optimalNormFingerIds = Enumerable.Range(1, (int)BigInteger.Log(MAX_KEY, 2))
+        var optimalNormFingerIds = Enumerable.Range(0, (int)BigInteger.Log(MAX_KEY, 2))
             .Select(i => new ChordKey(BigInteger.Pow(2, i), MAX_KEY));
 
         optimalNormFingerIds.Should().Match(optFingers => optFingers
@@ -83,7 +83,7 @@ public class TableCreationTest
 //                 networkNodes.FirstOrDefault(x => x.NodeId >= k)
 //                 ?? networkNodes.ArgMin(x => x.NodeId) as IChordEndpoint),
 //             MAX_KEY);
-//         await fingerTable.UpdateTable(local.NodeId);
+//         await fingerTable.BuildTable(local.NodeId);
 //         return fingerTable;
 //     }
 
@@ -99,7 +99,7 @@ public class TableCreationTest
 //         var chordNodes = Enumerable.Range(0, NUM_NODES)
 //             .Select(i => new ChordEndpoint() { NodeId = ChordKey.PickRandom(MAX_KEY) })
 //             .ToList();
-//         var local = chordNodes.First();
+//         var (local, successor) = (chordNodes[0], chordNodes[1]);
 //         var networkNodes = chordNodes.Except(new [] { local }).ToList();
 //         var fingerTable = await initTable(MAX_KEY, local, networkNodes);
 
@@ -107,7 +107,7 @@ public class TableCreationTest
 //         var keysToLookUp = Enumerable.Range(0, NUM_LOOKUPS)
 //             .Select(x => ChordKey.PickRandom(MAX_KEY)).ToList();
 //         var endpointOfKey = keysToLookUp
-//             .Select(k => fingerTable.FindBestFinger(k));
+//             .Select(k => fingerTable.FindBestFinger(k, successor.NodeId));
 
 //         // assert
 

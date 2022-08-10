@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Chord.Lib.Impl;
 using NSubstitute;
 using Xunit;
 using Xunit.Abstractions;
@@ -20,7 +21,7 @@ public class ChordNetworkSimulationTest
         _logger = logger;
     }
 
-    class RequestSenderMock : IChordRequestSender
+    class RequestSenderMock : IChordClient
     {
         public void RegisterNodes(IDictionary<ChordKey, ChordNode> nodes)
             => this.nodes = new ConcurrentDictionary<ChordKey, ChordNode>(nodes);
@@ -29,7 +30,7 @@ public class ChordNetworkSimulationTest
             new ConcurrentDictionary<ChordKey, ChordNode>();
 
         public async Task<IChordResponseMessage> SendRequest(
-                IChordRequestMessage request, IChordEndpoint receiver)
+                IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token = null)
             => await nodes[receiver.NodeId].ProcessRequest(request);
         // TODO: think about what happens when the receiver is not registered
     }
@@ -48,10 +49,13 @@ public class ChordNetworkSimulationTest
         var sender = new RequestSenderMock();
         IDictionary<ChordKey, ChordNode> simulatedNodes = simulatedNodes =
             Enumerable.Range(1, testNodesCount)
-                .Select(x => new ChordNode(sender, new ChordNodeConfiguration() {
-                    IpAddress = $"10.0.0.{ x }",
-                    ChordPort = chordPort.ToString()
-                }))
+                .Select(x => new ChordNode(
+                    sender,
+                    new ZeroProtocolPayloadWorker(),
+                    new ChordNodeConfiguration() {
+                        IpAddress = $"10.0.0.{ x }",
+                        ChordPort = chordPort.ToString()
+                    }))
                 .ToDictionary(x => x.NodeId);
         sender.RegisterNodes(simulatedNodes);
 
@@ -61,7 +65,8 @@ public class ChordNetworkSimulationTest
         // something like e.g. a Kubernetes rollout of several chord instances
         var bootstrapNode = simulatedNodes.First().Value.Local;
         var bootstrapperMock = Substitute.For<IChordBootstrapper>();
-        bootstrapperMock.FindBootstrapNode(default).ReturnsForAnyArgs(x => bootstrapNode);
+        bootstrapperMock.FindBootstrapNode()
+            .ReturnsForAnyArgs(x => Task.FromResult(bootstrapNode));
         var joinTasks = simulatedNodes.Values.AsParallel()
             .Select(x => x.JoinNetwork(bootstrapperMock)).ToArray();
 

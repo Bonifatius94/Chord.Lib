@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Chord.Lib;
+using Chord.Lib.Impl;
 
 namespace Chord.Api.Controllers
 {
@@ -23,9 +24,11 @@ namespace Chord.Api.Controllers
             var requestSender = new HttpChordRequestSender();
             var endpointGenerator = new IPv4EndpointGenerator(
                 ipConfig, (key) => new ChordKey(key, MAX_ID));
-            var bootstrapper = new ChordBootstrapper(endpointGenerator);
+            var bootstrapper = new ChordBootstrapper(requestSender, endpointGenerator);
 
-            node = new ChordNode(requestSender, nodeConfig);
+            // TODO: replace with real worker
+            var payloadWorker = new ZeroProtocolPayloadWorker();
+            node = new ChordNode(requestSender, payloadWorker, nodeConfig);
             node.JoinNetwork(bootstrapper).Wait();
         }
 

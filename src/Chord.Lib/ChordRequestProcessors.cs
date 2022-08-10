@@ -10,9 +10,11 @@ public interface IChordRequestProcessor
 
 public class ChordNodeRequestProcessor : IChordRequestProcessor
 {
+    // TODO: synchronize the node state with a Actor-model event sourcing approach
+    
     public ChordNodeRequestProcessor(
         IChordNode node,
-        IChordRequestSender sender)
+        IChordClient sender)
     {
         requestProcessors = new Dictionary<ChordRequestType, IChordRequestProcessor>() {
             { ChordRequestType.HealthCheck, new HealthCheckRequestProcessor(node) },
@@ -64,14 +66,14 @@ public class KeyLookupRequestProcessor : IChordRequestProcessor
 {
     public KeyLookupRequestProcessor(
         IChordNode node,
-        IChordRequestSender sender)
+        IChordClient sender)
     {
         this.node = node;
         this.sender = sender;
     }
 
     private readonly IChordNode node;
-    private readonly IChordRequestSender sender;
+    private readonly IChordClient sender;
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
     {
@@ -131,14 +133,14 @@ public class CommitNodeJoinRequestProcessor : IChordRequestProcessor
 {
     public CommitNodeJoinRequestProcessor(
         IChordNode node,
-        IChordRequestSender sender)
+        IChordClient sender)
     {
         this.node = node;
         this.sender = sender;
     }
 
     private readonly IChordNode node;
-    private readonly IChordRequestSender sender;
+    private readonly IChordClient sender;
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
     {
@@ -188,14 +190,14 @@ public class CommitNodeLeaveRequestProcessor : IChordRequestProcessor
 {
     public CommitNodeLeaveRequestProcessor(
         IChordNode node,
-        IChordRequestSender sender)
+        IChordClient sender)
     {
         this.node = node;
         this.sender = sender;
     }
 
     private readonly IChordNode node;
-    private readonly IChordRequestSender sender;
+    private readonly IChordClient sender;
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
     {

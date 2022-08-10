@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Chord.Lib;
@@ -60,15 +61,22 @@ public interface IChordResponseMessage
     IEnumerable<IChordEndpoint> FingerTable { get; set; }
 }
 
-public interface IChordRequestSender
+public interface IChordClient
 {
     Task<IChordResponseMessage> SendRequest(
-        IChordRequestMessage request, IChordEndpoint receiver);
+        IChordRequestMessage request,
+        IChordEndpoint receiver,
+        CancellationToken? token = null);
+}
+
+public interface IExplorableChordEndpointGenerator
+{
+    IEnumerable<IChordEndpoint> GenerateEndpoints();
 }
 
 public interface IChordBootstrapper
 {
-    Task<IChordEndpoint> FindBootstrapNode(IChordRequestSender sender);
+    Task<IChordEndpoint> FindBootstrapNode();
 }
 
 public interface IIpSettings
@@ -173,4 +181,10 @@ public interface IChordNode
     /// </summary>
     /// <param name="newSuccessor">The new successor of the node.</param>
     void UpdateSuccessor(IChordEndpoint newSuccessor);
+}
+
+public interface IChordPayloadWorker
+{
+    Task PreloadData(IChordEndpoint successor);
+    Task BackupData(IChordEndpoint successor);
 }
