@@ -112,7 +112,7 @@ public class ChordFingerTable
                 : Task.Delay(updateTableTimeoutMillis, token.Value);
 
             var tokenSource = new CancellationTokenSource();
-            var lookupTasks = fingerKeys
+            lookupTasks = fingerKeys
                 .Select(x => lookupKeyAsync(x, tokenSource.Token))
                 .ToArray();
 

@@ -41,8 +41,9 @@ public class TableCreationTest
         var optimalNormFingerIds = Enumerable.Range(0, (int)BigInteger.Log(MAX_KEY, 2))
             .Select(i => new ChordKey(BigInteger.Pow(2, i), MAX_KEY));
 
+        actualNormFingerIds.Should().NotBeEmpty();
         optimalNormFingerIds.Should().Match(optFingers => optFingers
-            .SkipWhile(x => x.Id <= 5000)
+            .SkipWhile(x => x.Id <= 5 * 1000000 / NUM_NODES)
             .All(opt => actualNormFingerIds
                 .Select(act => BigInteger.Abs(act.Id - opt.Id))
                 .MinBy(x => x) <= opt.Id / 2));
