@@ -15,6 +15,7 @@ public class ChordBootstrapper : IChordBootstrapper
 
     public async Task<IChordEndpoint> FindBootstrapNode()
     {
+        // TODO: make sure the bootstrapper doesn't return the local endpoint as bootstrap node
         const int PING_TIMEOUT_MS = 1000;
         const int NUM_PARALLEL_PINGS = 128;
 

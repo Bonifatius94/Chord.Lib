@@ -40,21 +40,21 @@ public readonly struct ChordKey : IComparable
     public ChordKey(BigInteger id, BigInteger keySpace)
     {
         Id = restMod(id, keySpace);
-        this.keySpace = keySpace;
+        KeySpace = keySpace;
     }
 
     #endregion Init
 
-    private readonly BigInteger keySpace;
+    public BigInteger KeySpace { get; }
     public BigInteger Id { get; }
 
     #region Arithmetics
 
     private ChordKey add(ChordKey other)
-        => new ChordKey(id: restMod(Id + other.Id, keySpace), keySpace: keySpace);
+        => new ChordKey(id: restMod(Id + other.Id, KeySpace), KeySpace);
 
     private ChordKey sub(ChordKey other)
-        => new ChordKey(id: restMod(Id - other.Id, keySpace), keySpace: keySpace);
+        => new ChordKey(id: restMod(Id - other.Id, KeySpace), KeySpace);
 
     private static BigInteger restMod(BigInteger element, BigInteger classes)
         => (element % classes + classes) % classes;

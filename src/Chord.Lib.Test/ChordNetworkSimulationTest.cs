@@ -37,35 +37,44 @@ public class ChordNetworkSimulationTest
     {
         // define test hyperparams
         const int testNodesCount = 100;
+        const int keySpace = 100000;
         const int chordPort = 9876;
         const int testTimeoutSecs = 5 * 60;
 
         _logger.WriteLine($"Simulating a chord network with { testNodesCount } nodes, timeout={ testTimeoutSecs }s");
 
-        // create nodes to be simulated
+        var endpoints = Enumerable.Range(1, testNodesCount)
+                .Select(x => new ChordEndpoint(
+                    ChordKey.PickRandom(keySpace),
+                    ChordHealthStatus.Starting,
+                    $"10.0.0.{ x }",
+                    chordPort.ToString()))
+                .ToList();
+
         var sender = new RequestSenderMock();
-        IDictionary<ChordKey, ChordNode> simulatedNodes = simulatedNodes =
-            Enumerable.Range(1, testNodesCount)
-                .Select(x => new ChordNode(
+        var nodes = Enumerable.Range(1, testNodesCount)
+            .Select(x =>
+                new ChordNode(
                     sender,
                     new ZeroProtocolPayloadWorker(),
-                    new ChordNodeConfiguration() {
-                        IpAddress = $"10.0.0.{ x }",
-                        ChordPort = chordPort.ToString()
-                    }))
-                .ToDictionary(x => x.NodeId);
-        sender.RegisterNodes(simulatedNodes);
+                    new ChordNodeConfiguration()))
+            .ToList();
+
+        // init network simulation stuff
+        var nodesWithEndpoints = nodes.Zip(endpoints);
+        sender.RegisterNodes(nodes.ToDictionary(x => x.NodeId));
+        var bootstrapNode = endpoints.First<IChordEndpoint>();
+        var bootstrapperMock = Substitute.For<IChordBootstrapper>();
+        bootstrapperMock.FindBootstrapNode()
+            .ReturnsForAnyArgs(x => Task.FromResult(bootstrapNode));
 
         _logger.WriteLine("Successfully created nodes. Starting node join procedures.");
 
         // connect the chord nodes to a self-organized cluster by simulating
         // something like e.g. a Kubernetes rollout of several chord instances
-        var bootstrapNode = simulatedNodes.First().Value.Local;
-        var bootstrapperMock = Substitute.For<IChordBootstrapper>();
-        bootstrapperMock.FindBootstrapNode()
-            .ReturnsForAnyArgs(x => Task.FromResult(bootstrapNode));
-        var joinTasks = simulatedNodes.Values.AsParallel()
-            .Select(x => x.JoinNetwork(bootstrapperMock)).ToArray();
+        var joinTasks = nodesWithEndpoints
+            .Select(x => Task.Run(() => x.First.JoinNetwork(x.Second, bootstrapperMock)))
+            .ToArray();
 
         // log the system state on a regular schedule until all join tasks completed
         // abort after several minutes if the tasks did not finish until then -> unit test failed

@@ -11,13 +11,12 @@ public class ChordRequestSender
 
     public async Task<IChordEndpoint> IntiateSuccessor(
         IChordEndpoint bootstrapNode,
-        IChordEndpoint local,
-        BigInteger maxId)
+        IChordEndpoint local)
     {
         IChordEndpoint successor;
 
         do {
-            local.NodeId = ChordKey.PickRandom(maxId);
+            local.PickNewRandomId();
             var response = await SearchEndpointOfKey(local.NodeId, local, bootstrapNode);
             successor = response.Responder;
         } while (successor.NodeId == local.NodeId);

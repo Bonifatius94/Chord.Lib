@@ -6,33 +6,39 @@ public class ChordFingerTable
 {
     #region Init
 
-    // TODO: pass the local node id by constructor
-
     public ChordFingerTable(
         KeyLookupFunc lookupKeyAsync,
-        BigInteger maxKey,
+        IChordEndpoint local,
+        IChordEndpoint successor = null,
+        IChordEndpoint predecessor = null,
         int updateTableTimeoutMillis = 600)
         : this(new ConcurrentDictionary<ChordKey, IChordEndpoint>(),
-            lookupKeyAsync, maxKey, updateTableTimeoutMillis) { }
+            lookupKeyAsync, local, successor, predecessor, updateTableTimeoutMillis) { }
 
     public ChordFingerTable(
         IDictionary<ChordKey, IChordEndpoint> fingers,
         KeyLookupFunc lookupKeyAsync,
-        BigInteger maxKey,
+        IChordEndpoint local,
+        IChordEndpoint successor = null,
+        IChordEndpoint predecessor = null,
         int updateTableTimeoutMillis = 600)
     {
+        this.fingerTable = new ConcurrentDictionary<ChordKey, IChordEndpoint>(fingers);
         this.lookupKeyAsync = lookupKeyAsync;
-        this.maxKey = maxKey;
+        this.Local = local;
+        this.Successor = successor;
+        this.Predecessor = predecessor;
         this.updateTableTimeoutMillis = updateTableTimeoutMillis;
     }
 
-    private readonly Func<ChordKey, CancellationToken, Task<IChordEndpoint>> lookupKeyAsync;
-    private readonly BigInteger maxKey;
+    private readonly KeyLookupFunc lookupKeyAsync;
     private readonly int updateTableTimeoutMillis;
 
     #endregion Init
 
-    // TODO: add an attribute representing the successor endpoint (a special finger)
+    public IChordEndpoint Local { get; private set; }
+    public IChordEndpoint Successor { get; private set; }
+    public IChordEndpoint Predecessor { get; private set; }
 
     private IDictionary<ChordKey, IChordEndpoint> fingerTable = 
         new ConcurrentDictionary<ChordKey, IChordEndpoint>();
@@ -40,41 +46,31 @@ public class ChordFingerTable
     public IEnumerable<IChordEndpoint> AllFingers
         => fingerTable.Values;
 
-    public void InsertFinger(IChordEndpoint finger)
-        => fingerTable.TryAdd(finger.NodeId, finger);
-        // TODO: think of implementing the successor as a separate attribute
+    public void UpdateSuccessor(IChordEndpoint newSuccessor)
+        => Successor = newSuccessor;
 
-    #region FingerForwarding
+    public void UpdatePredecessor(IChordEndpoint newPredecessor)
+        => Successor = newPredecessor;
+
+    #region Forwarding
 
     /// <summary>
-    /// Find the chord endpoint managing the given key.
+    /// Find the Chord endpoint to forward the key lookup request to.
     /// </summary>
-    /// <param name="key">The key to be looked up.</param>
-    /// <param name="successorKey">The local node's successor id.</param>
-    /// <returns></returns>
-    public IChordEndpoint FindBestFinger(ChordKey key, ChordKey successorKey)
+    /// <param name="lookupKey">The key to be looked up.</param>
+    /// <returns>a Chord endpoint.</returns>
+    public IChordEndpoint FindBestFinger(ChordKey lookupKey)
     {
-        if (!fingerTable.Any())
+        if (!fingerTable.Any() || Successor == null)
             return null;
 
-        // termination case: forward to the successor if it is the manager of the key
-        // recursion case: forward to the closest predecessing finger of the key
-        //     -> eventually, the predecessor of the node searched is found
-        var fingerKey = successorKey >= key ? successorKey
-            : findClosestPredecessor(key);
-
-        // info: this code assumes that the successor endpoint is inserted as finger
-        // TODO: expose the special role of the successor a bit more explicitly
-        return fingerTable.ContainsKey(fingerKey) ? fingerTable[fingerKey] : null;
+        return (lookupKey - Local.NodeId >= Successor.NodeId - Local.NodeId)
+            ? Successor : fingerTable.Values.MaxBy(x => x.NodeId - lookupKey);
     }
 
-    private ChordKey findClosestPredecessor(ChordKey key)
-        => fingerTable.Keys.Select(x => x - key).Max() + key;
-        // TODO: this seems to be wrong ...
+    #endregion Forwarding
 
-    #endregion FingerForwarding
-
-    #region FingerTable
+    #region TableCreation
 
     /// <summary>
     /// Scan the network for other Chord nodes managing given keys
@@ -84,48 +80,53 @@ public class ChordFingerTable
     /// growing distances between the keys up to a key roughly at the opposite
     /// side of the chord token-ring.
     /// </summary>
-    /// <param name="localId">The local endpoint's id.</param>
     /// <param name="token">A cancellation token to cancel the procedure gracefully.</param>
-    public async Task BuildTable(ChordKey localId, CancellationToken? token = null)
+    public async Task BuildTable(CancellationToken? token = null)
     {
-        // get the ids 2^i for i in { 0, ..., log2(maxId) - 1 } to be looked up
-        var fingerKeys = Enumerable.Range(0, (int)BigInteger.Log(maxKey, 2))
-            .Select(i => new ChordKey(BigInteger.Pow(2, i), maxKey))
-            .Select(key => key + localId)
+        var fingerKeys = optimalFingerKeys(Local);
+        var newFingers = await findFingersAsync(fingerKeys, token);
+        fingerTable = new ConcurrentDictionary<ChordKey, IChordEndpoint>(
+            newFingers.ToDictionary(x => x.NodeId));
+
+        // TODO: what about Chord ring fusions?!
+        //       -> re-scan the network with IExplorableEndpointProvider
+    }
+
+    // get the ids 2^i for i in { 0, ..., log2(maxId) - 1 } to be looked up
+    private IList<ChordKey> optimalFingerKeys(IChordEndpoint local)
+        => Enumerable.Range(0, (int)BigInteger.Log(local.NodeId.KeySpace, 2))
+            .Select(i => new ChordKey(BigInteger.Pow(2, i), local.NodeId.KeySpace))
+            .Select(key => key + local.NodeId)
             .ToList();
 
+    private async Task<IEnumerable<IChordEndpoint>> findFingersAsync(
+        IList<ChordKey> fingerKeys,
+        CancellationToken? token = null)
+    {
         var lookupTasks = new Task<IChordEndpoint>[0];
 
-        // perform key lookups in parallel (pass a token for cancellation)
-        // when a timeout occurs or the task is cancelled externally
-        //   -> cancel all running tasks, keep already completed ones as is
         await Task.Run(() => {
-            var tokenSource = new CancellationTokenSource();
+
             var timeoutTask = token == null
                 ? Task.Delay(updateTableTimeoutMillis)
                 : Task.Delay(updateTableTimeoutMillis, token.Value);
-            lookupTasks = fingerKeys
+
+            var tokenSource = new CancellationTokenSource();
+            var lookupTasks = fingerKeys
                 .Select(x => lookupKeyAsync(x, tokenSource.Token))
                 .ToArray();
-            var allLookupsCompleteTask = Task.WhenAll(lookupTasks);
 
-            // cancel dangling lookup tasks after running into a timeout
+            var allLookupsCompleteTask = Task.WhenAll(lookupTasks);
             int firstTask = Task.WaitAny(timeoutTask, allLookupsCompleteTask);
             if (firstTask == 0)
                 tokenSource.Cancel();
         });
 
-        // create a new finger table by assigning the nodes that
-        // responded to the lookup requests (including the successor)
-        var newFingers = lookupTasks
+        return lookupTasks
             .Where(x => x.Status == TaskStatus.RanToCompletion)
             .Select(x => x.Result)
-            .DistinctBy(x => x.NodeId)
-            .ToDictionary(x => x.NodeId);
-        fingerTable = new ConcurrentDictionary<ChordKey, IChordEndpoint>(newFingers);
-
-        // TODO: what about Chord ring fusions?!
+            .DistinctBy(x => x.NodeId);
     }
 
-    #endregion FingerTable
+    #endregion TableCreation
 }

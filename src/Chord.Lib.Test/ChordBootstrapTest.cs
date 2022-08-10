@@ -46,12 +46,12 @@ public class BootstrapperTest
         settingsMock.Ipv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
         settingsMock.Ipv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
 
-        responseMock.Responder = new ChordEndpoint() {
-            IpAddress = "192.168.178.245",
-            NodeId = ChordKey.PickRandom(),
-            Port = "9876",
-            State = ChordHealthStatus.Idle
-        };
+        responseMock.Responder = new ChordEndpoint(
+            ChordKey.PickRandom(),
+            ChordHealthStatus.Idle,
+            "192.168.178.245",
+            "9876"
+        );
 
         var endpointGen = new IPv4EndpointGenerator(
             settingsMock, (k) => new ChordKey(k, 254));

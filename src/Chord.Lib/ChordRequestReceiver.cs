@@ -1,19 +1,19 @@
 namespace Chord.Lib;
 
-public interface IChordRequestProcessor
+public interface IChordRequestReceiver
 {
     Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request);
 }
 
-public class ChordNodeRequestProcessor : IChordRequestProcessor
+public class ChordNodeRequestReceiver : IChordRequestReceiver
 {
     // TODO: synchronize the node state with a Actor-model event sourcing approach
     
-    public ChordNodeRequestProcessor(
+    public ChordNodeRequestReceiver(
         IChordNode node,
         IChordClient sender)
     {
-        requestProcessors = new Dictionary<ChordRequestType, IChordRequestProcessor>() {
+        requestProcessors = new Dictionary<ChordRequestType, IChordRequestReceiver>() {
             { ChordRequestType.HealthCheck, new HealthCheckRequestProcessor(node) },
             { ChordRequestType.KeyLookup, new KeyLookupRequestProcessor(node, sender) },
             { ChordRequestType.UpdateSuccessor, new UpdateSuccessorRequestProcessor(node) },
@@ -24,13 +24,13 @@ public class ChordNodeRequestProcessor : IChordRequestProcessor
         };
     }
 
-    private readonly Dictionary<ChordRequestType, IChordRequestProcessor> requestProcessors;
+    private readonly Dictionary<ChordRequestType, IChordRequestReceiver> requestProcessors;
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
         => await requestProcessors[request.Type].ProcessAsync(request);
 }
 
-public class UpdateSuccessorRequestProcessor : IChordRequestProcessor
+public class UpdateSuccessorRequestProcessor : IChordRequestReceiver
 {
     public UpdateSuccessorRequestProcessor(IChordNode node)
         => this.node = node;
@@ -59,7 +59,7 @@ public class UpdateSuccessorRequestProcessor : IChordRequestProcessor
     }
 }
 
-public class KeyLookupRequestProcessor : IChordRequestProcessor
+public class KeyLookupRequestProcessor : IChordRequestReceiver
 {
     public KeyLookupRequestProcessor(
         IChordNode node,
@@ -92,7 +92,7 @@ public class KeyLookupRequestProcessor : IChordRequestProcessor
     }
 }
 
-public class HealthCheckRequestProcessor : IChordRequestProcessor
+public class HealthCheckRequestProcessor : IChordRequestReceiver
 {
     public HealthCheckRequestProcessor(IChordNode node)
         => this.node = node;
@@ -103,7 +103,7 @@ public class HealthCheckRequestProcessor : IChordRequestProcessor
         => await Task.FromResult(new ChordResponseMessage() { Responder = node.Local });
 }
 
-public class InitNodeJoinRequestProcessor : IChordRequestProcessor
+public class InitNodeJoinRequestProcessor : IChordRequestReceiver
 {
     public InitNodeJoinRequestProcessor(IChordNode node)
         => this.node = node;
@@ -126,7 +126,7 @@ public class InitNodeJoinRequestProcessor : IChordRequestProcessor
     }
 }
 
-public class CommitNodeJoinRequestProcessor : IChordRequestProcessor
+public class CommitNodeJoinRequestProcessor : IChordRequestReceiver
 {
     public CommitNodeJoinRequestProcessor(
         IChordNode node,
@@ -160,7 +160,7 @@ public class CommitNodeJoinRequestProcessor : IChordRequestProcessor
     }
 }
 
-public class InitNodeLeaveRequestProcessor : IChordRequestProcessor
+public class InitNodeLeaveRequestProcessor : IChordRequestReceiver
 {
     public InitNodeLeaveRequestProcessor(IChordNode node)
     {
@@ -183,7 +183,7 @@ public class InitNodeLeaveRequestProcessor : IChordRequestProcessor
     }
 }
 
-public class CommitNodeLeaveRequestProcessor : IChordRequestProcessor
+public class CommitNodeLeaveRequestProcessor : IChordRequestReceiver
 {
     public CommitNodeLeaveRequestProcessor(
         IChordNode node,

@@ -39,11 +39,12 @@ public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
         var chordPort = ipConfig.ChordPort;
         var (firstIp, lastIp) = getFirstAndLastAddress();
         var allEndpoints = BigIntEnumerable.Range(firstIp, lastIp)
-            .Select(addr => new ChordEndpoint() {
-                NodeId = newKey(-1),
-                IpAddress = new IPAddress(addr.ToByteArray()).ToString(),
-                Port = chordPort.ToString()
-            });
+            .Select(addr => new ChordEndpoint(
+                newKey(-1),
+                ChordHealthStatus.Questionable,
+                new IPAddress(addr.ToByteArray()).ToString(),
+                chordPort.ToString()
+            ));
         return allEndpoints;
     }
 }

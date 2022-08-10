@@ -14,22 +14,24 @@ namespace Chord.Api.Controllers
     {
         public ChordController(IIpSettings ipConfig)
         {
-            const long MAX_ID = long.MaxValue;
+            const long keySpace = long.MaxValue;
 
-            var nodeConfig = new ChordNodeConfiguration() {
-                IpAddress = ipConfig.ChordIpv4Address.ToString(),
-                ChordPort = ipConfig.ChordPort.ToString()
-            };
+            var localEndpoint = new ChordEndpoint(
+                ChordKey.PickRandom(keySpace),
+                ChordHealthStatus.Starting,
+                ipConfig.ChordIpv4Address.ToString(),
+                ipConfig.ChordPort.ToString());
 
             var requestSender = new HttpChordRequestSender();
             var endpointGenerator = new IPv4EndpointGenerator(
-                ipConfig, (key) => new ChordKey(key, MAX_ID));
+                ipConfig, (key) => new ChordKey(key, keySpace));
             var bootstrapper = new ChordBootstrapper(requestSender, endpointGenerator);
 
             // TODO: replace with real worker
             var payloadWorker = new ZeroProtocolPayloadWorker();
+            var nodeConfig = new ChordNodeConfiguration();
             node = new ChordNode(requestSender, payloadWorker, nodeConfig);
-            node.JoinNetwork(bootstrapper).Wait();
+            node.JoinNetwork(localEndpoint, bootstrapper).Wait();
         }
 
         private static ChordNode node;

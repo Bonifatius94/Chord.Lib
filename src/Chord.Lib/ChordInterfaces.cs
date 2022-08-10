@@ -23,12 +23,16 @@ public enum ChordHealthStatus
 public interface IChordEndpoint
 {
     // summary of remote node features
-    ChordKey NodeId { get; set; }
-    ChordHealthStatus State { get; set; }
+    ChordKey NodeId { get; }
+    ChordHealthStatus State { get; }
 
     // TODO: remove IP endpoint implementation details from interface
-    string IpAddress { get; set; }
-    string Port { get; set; }
+    string IpAddress { get; }
+    string Port { get; }
+
+    IChordEndpoint DeepClone();
+    ChordKey PickNewRandomId();
+    void UpdateState(ChordHealthStatus newState);
 }
 
 public interface IChordRequestMessage
@@ -52,7 +56,7 @@ public interface IChordResponseMessage
     bool ReadyForDataCopy { get; set; }
     bool CommitSuccessful { get; set; }
     IChordEndpoint Predecessor { get; set; }
-    IEnumerable<IChordEndpoint> FingerTable { get; set; }
+    IEnumerable<IChordEndpoint> CachedFingerTable { get; set; }
 }
 
 public interface IChordClient
@@ -129,14 +133,15 @@ public interface IChordNode
     /// <summary>
     /// The chord node's finger table used for routing.
     /// </summary>
-    ChordFingerTable FingerTable { get; }
+    // ChordFingerTable FingerTable { get; }
 
     /// <summary>
     /// Create a new chord endpoint and join it to the network.
     /// </summary>
+    /// <param name="local">The local Chord endpoint of the node.</param>
     /// <param name="bootstrapper">A bootstrap procedure provider.</param>
     /// <returns>a task handle to be awaited asynchronously</returns>
-    Task JoinNetwork(IChordBootstrapper bootstrapper);
+    Task JoinNetwork(IChordEndpoint local, IChordBootstrapper bootstrapper);
 
     /// <summary>
     /// Shut down this chord endpoint by leaving the network gracefully.

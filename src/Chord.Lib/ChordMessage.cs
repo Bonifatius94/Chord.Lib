@@ -21,5 +21,6 @@ public class ChordResponseMessage : IChordResponseMessage
     public bool ReadyForDataCopy { get; set; }
     public bool CommitSuccessful { get; set; }
     public IChordEndpoint Predecessor { get; set; }
-    public IEnumerable<IChordEndpoint> FingerTable { get; set; }
+    public IEnumerable<IChordEndpoint> CachedFingerTable { get; set; } =
+        new List<IChordEndpoint>();
 }
