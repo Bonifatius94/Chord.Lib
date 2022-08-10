@@ -50,7 +50,7 @@ public class ChordFingerTable
         => Successor = newSuccessor;
 
     public void UpdatePredecessor(IChordEndpoint newPredecessor)
-        => Successor = newPredecessor;
+        => Predecessor = newPredecessor;
 
     #region Forwarding
 
