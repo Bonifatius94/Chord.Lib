@@ -1,14 +1,15 @@
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Chord.Lib;
 
 namespace Chord.Api.Controllers;
 
-public class HttpChordRequestSender : IChordRequestSender
+public class HttpChordRequestSender : IChordClient
 {
     public async Task<IChordResponseMessage> SendRequest(
-        IChordRequestMessage request, IChordEndpoint receiver)
+        IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token)
     {
         // create the request URL to the remote chord endpoint
         string url = $"http://{ receiver.IpAddress }:{ receiver.Port }/chord";
