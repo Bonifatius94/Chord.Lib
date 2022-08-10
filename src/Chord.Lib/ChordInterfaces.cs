@@ -96,13 +96,13 @@ public interface IIpSettings
     /// Retrieve the chord node's network ID.
     /// </summary>
     /// <returns>the IP address assiciated with the network ID</returns>
-    IPAddress Ipv4NetworkId { get; }
+    IPAddress IPv4NetworkId { get; }
 
     /// <summary>
     /// Retrieve the chord node's broadcast address.
     /// </summary>
     /// <returns>the IP address assiciated with the broadcast address</returns>
-    IPAddress Ipv4Broadcast { get; }
+    IPAddress IPv4Broadcast { get; }
 }
 
 /// <summary>

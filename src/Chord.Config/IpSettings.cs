@@ -83,7 +83,7 @@ namespace Chord.Config
 
         #region ChordNetwork
 
-        public IPAddress Ipv4NetworkId
+        public IPAddress IPv4NetworkId
         {
             get
             {
@@ -100,7 +100,7 @@ namespace Chord.Config
             }
         }
 
-        public IPAddress Ipv4Broadcast
+        public IPAddress IPv4Broadcast
         {
             get
             {

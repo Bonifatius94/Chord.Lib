@@ -43,8 +43,8 @@ public class BootstrapperTest
     public async Task Test_ShouldFindBootstrapNode_WhenHealthCheckSuccessful()
     {
         settingsMock.ChordPort.Returns(9876);
-        settingsMock.Ipv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
-        settingsMock.Ipv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
+        settingsMock.IPv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
+        settingsMock.IPv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
 
         responseMock.Responder = new ChordEndpoint(
             ChordKey.PickRandom(),
