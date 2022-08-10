@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,8 +9,6 @@ using Xunit;
 using Xunit.Abstractions;
 
 namespace Chord.Lib.Test;
-
-using MessageCallback = System.Func<IChordRequestMessage, IChordEndpoint, Task<IChordResponseMessage>>;
 
 public class ChordNetworkSimulationTest
 {

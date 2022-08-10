@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Chord.Lib;
 
 public class ChordRequestMessage : IChordRequestMessage
