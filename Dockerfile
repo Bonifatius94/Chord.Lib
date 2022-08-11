@@ -1,5 +1,5 @@
 
-# use the official Microsoft .NET 5 build image
+# use the official Microsoft .NET build image
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
 
 # move to the src target dir
@@ -18,14 +18,14 @@ RUN dotnet restore --runtime linux-x64
 # copy the source code
 ADD ./src/ ./
 
-# TODO: run the unit tests here ...
+# run the unit / integration tests
 RUN dotnet test --runtime linux-x64 --configuration Release --no-restore
 
 # make a release build
 RUN dotnet publish --runtime linux-x64 --configuration Release \
                    --output /app/bin/ --no-restore
 
-# define the .NET 5 runtime image
+# use the official Microsoft .NET runtime image
 FROM mcr.microsoft.com/dotnet/runtime:6.0
 WORKDIR /app/bin
 COPY --from=build-env /app/bin .

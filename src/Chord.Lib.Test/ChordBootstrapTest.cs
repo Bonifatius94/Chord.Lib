@@ -71,6 +71,8 @@ public class BootstrapperTest
         var sut = new ChordBootstrapper(senderMock, endpointGen);
         var bootstrapNode = await sut.FindBootstrapNode();
 
+        // TODO: this test fails on GitHub actions, check why it's flaky
+        bootstrapNode.Should().NotBeNull();
         bootstrapNode.IpAddress.Should().Be(expBootstrapIp);
     }
 
