@@ -186,4 +186,5 @@ public interface IChordPayloadWorker
 {
     Task PreloadData(IChordEndpoint successor);
     Task BackupData(IChordEndpoint successor);
+    Task<bool> IsReadyForDataCopy();
 }

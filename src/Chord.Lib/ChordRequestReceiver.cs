@@ -1,5 +1,6 @@
 namespace Chord.Lib;
 
+using Microsoft.Extensions.Logging;
 using ProcessRequestFunc = Func<IChordRequestMessage, Task<IChordResponseMessage>>;
 
 public class ChordNodeRequestReceiver
@@ -8,10 +9,14 @@ public class ChordNodeRequestReceiver
 
     public ChordNodeRequestReceiver(
         IChordNode node,
-        IChordClient sender)
+        IChordClient sender,
+        IChordPayloadWorker worker,
+        ILogger logger = null)
     {
         this.node = node;
         this.sender = sender;
+        this.worker = worker;
+        this.logger = logger;
 
         handlers = new Dictionary<ChordRequestType, ProcessRequestFunc>() {
             { ChordRequestType.HealthCheck, processHealthCheck },
@@ -26,6 +31,8 @@ public class ChordNodeRequestReceiver
 
     private readonly IChordNode node;
     private readonly IChordClient sender;
+    private readonly IChordPayloadWorker worker;
+    private readonly ILogger logger;
     private readonly IDictionary<ChordRequestType, ProcessRequestFunc> handlers;
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
@@ -43,7 +50,6 @@ public class ChordNodeRequestReceiver
         // update the successor
         if (canUpdate)
             node.UpdateSuccessor(request.NewSuccessor);
-        // TODO: add a function to the ChordNode domain model for this use case
 
         // respond whether the update was successful
         return new ChordResponseMessage() {
@@ -55,19 +61,13 @@ public class ChordNodeRequestReceiver
     private async Task<IChordResponseMessage> processKeyLookup(IChordRequestMessage request)
     {
         // handle the special case for being the initial node of the cluster
-        // seving the first lookup request of a node join
+        // serving the first lookup request of a node join
         if (node.Local.State == ChordHealthStatus.Starting)
-        {
+            return await Task.FromResult(new ChordResponseMessage() { Responder = node.Local });
             // TODO: think of what else needs to be done here ...
-            return new ChordResponseMessage() { Responder = node.Local };
-        }
 
         // perform key lookup and return the endpoint responsible for the key
         var responder = await node.LookupKey(request.RequestedResourceId);
-
-        // TODO: deconstruct LookupKey into a local cache lookup and a network request here ...
-        //       -> get rid of the uncertainty that LookupKey might send network requests (!!!)
-
         return new ChordResponseMessage() { Responder = responder };
     }
 
@@ -76,15 +76,22 @@ public class ChordNodeRequestReceiver
 
     private async Task<IChordResponseMessage> processInitNodeJoin(IChordRequestMessage request)
     {
-        return await Task.FromResult(new ChordResponseMessage() {
+        var task = worker.IsReadyForDataCopy();
+        bool readyForDataCopy = await task.TryRun(
+            (ex) => logger?.LogError(
+                $"Payload worker data copy check failed!\nException:{ex}"),
+            false);
+
+        return new ChordResponseMessage() {
             Responder = node.Local,
-            ReadyForDataCopy = true
-        });
+            ReadyForDataCopy = readyForDataCopy
+        };
     }
 
     private async Task<IChordResponseMessage> processCommitNodeJoin(IChordRequestMessage request)
     {
-        var response = await sender.SendRequest(
+        // TODO: move this inside the ChordRequestSender
+        var task = sender.SendRequest(
             new ChordRequestMessage() {
                 Type = ChordRequestType.UpdateSuccessor,
                 RequesterId = node.NodeId,
@@ -92,23 +99,35 @@ public class ChordNodeRequestReceiver
             },
             node.Predecessor);
 
+        bool commitSuccessful = await task.TryRun(
+            (r) => r.CommitSuccessful,
+            (ex) => logger?.LogError(
+                $"Updating the successor of {node.Predecessor.NodeId} failed!\nException:{ex}"),
+            false);
+
         return new ChordResponseMessage() {
             Responder = node.Local,
-            CommitSuccessful = response.CommitSuccessful
+            CommitSuccessful = commitSuccessful
         };
     }
 
     private async Task<IChordResponseMessage> processInitNodeLeave(IChordRequestMessage request)
     {
-        return await Task.FromResult(new ChordResponseMessage() {
+        var task = worker.IsReadyForDataCopy();
+        bool readyForDataCopy = await task.TryRun(
+            (ex) => logger?.LogError(
+                $"Payload worker data copy check failed!\nException:{ex}"),
+            false);
+
+        return new ChordResponseMessage() {
             Responder = node.Local,
-            ReadyForDataCopy = true
-        });
+            ReadyForDataCopy = readyForDataCopy
+        };
     }
 
     private async Task<IChordResponseMessage> processCommitNodeLeave(IChordRequestMessage request)
     {
-        var response = await sender.SendRequest(
+        var task = sender.SendRequest(
             new ChordRequestMessage() {
                 Type = ChordRequestType.UpdateSuccessor,
                 RequesterId = node.NodeId,
@@ -116,9 +135,15 @@ public class ChordNodeRequestReceiver
             },
             node.Predecessor);
 
+        bool commitSuccessful = await task.TryRun(
+            (r) => r.CommitSuccessful,
+            (ex) => logger?.LogError(
+                $"Updating the successor of {node.Predecessor.NodeId} failed!\nException:{ex}"),
+            false);
+
         return new ChordResponseMessage() {
             Responder = node.Local,
-            CommitSuccessful = response.CommitSuccessful
+            CommitSuccessful = commitSuccessful
         };
     }
 }

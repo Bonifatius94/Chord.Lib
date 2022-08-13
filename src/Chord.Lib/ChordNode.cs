@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace Chord.Lib;
 
 public class ChordNodeConfiguration
@@ -30,12 +32,13 @@ public class ChordNode : IChordNode
     public ChordNode(
         IChordClient sender,
         IChordPayloadWorker payloadWorker,
-        ChordNodeConfiguration config)
+        ChordNodeConfiguration config,
+        ILogger logger = null)
     {
         this.sender = new ChordRequestSender(sender);
         this.payloadWorker = payloadWorker;
         this.config = config;
-        receiver = new ChordNodeRequestReceiver(this, sender);
+        receiver = new ChordNodeRequestReceiver(this, sender, payloadWorker, logger);
         backgroundTaskCallback = new CancellationTokenSource();
     }
 
