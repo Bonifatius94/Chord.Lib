@@ -3,17 +3,19 @@ namespace Chord.Lib;
 using Microsoft.Extensions.Logging;
 using ProcessRequestFunc = Func<IChordRequestMessage, Task<IChordResponseMessage>>;
 
-public class ChordNodeRequestReceiver
+public class ChordRequestReceiver
 {
     // TODO: synchronize the node state with an Actor-model event sourcing approach
 
-    public ChordNodeRequestReceiver(
-        IChordNode node,
-        IChordClient sender,
+    #region Init
+
+    public ChordRequestReceiver(
+        Func<IChordNodeState> getNodeState,
+        ChordRequestSender sender,
         IChordPayloadWorker worker,
         ILogger logger = null)
     {
-        this.node = node;
+        this.getNodeState = getNodeState;
         this.sender = sender;
         this.worker = worker;
         this.logger = logger;
@@ -29,31 +31,35 @@ public class ChordNodeRequestReceiver
         };
     }
 
-    private readonly IChordNode node;
-    private readonly IChordClient sender;
+    private readonly Func<IChordNodeState> getNodeState;
+    private IChordNodeState nodeState => getNodeState();
+
+    private readonly ChordRequestSender sender;
     private readonly IChordPayloadWorker worker;
     private readonly ILogger logger;
     private readonly IDictionary<ChordRequestType, ProcessRequestFunc> handlers;
+
+    #endregion Init
 
     public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
         => await handlers[request.Type](request);
 
     private async Task<IChordResponseMessage> processUpdateSuccessor(IChordRequestMessage request)
     {
-        const int timeout = 10;
+        const int timeoutInMillis = 10 * 1000;
 
         // ping the new successor to make sure it is healthy
-        var status = await node.CheckHealth(
-            request.NewSuccessor, timeout, ChordHealthStatus.Dead);
+        var status = await sender.HealthCheck(
+            nodeState.Local, request.NewSuccessor, ChordHealthStatus.Dead, timeoutInMillis);
         bool canUpdate = status != ChordHealthStatus.Dead;
 
         // update the successor
         if (canUpdate)
-            node.UpdateSuccessor(request.NewSuccessor);
+            nodeState.UpdateSuccessor(request.NewSuccessor);
 
         // respond whether the update was successful
         return new ChordResponseMessage() {
-            Responder = node.Local,
+            Responder = nodeState.Local,
             CommitSuccessful = canUpdate
         };
     }
@@ -62,17 +68,17 @@ public class ChordNodeRequestReceiver
     {
         // handle the special case for being the initial node of the cluster
         // serving the first lookup request of a node join
-        if (node.Local.State == ChordHealthStatus.Starting)
-            return await Task.FromResult(new ChordResponseMessage() { Responder = node.Local });
+        if (nodeState.Local.State == ChordHealthStatus.Starting)
+            return await Task.FromResult(new ChordResponseMessage() { Responder = nodeState.Local });
             // TODO: think of what else needs to be done here ...
 
         // perform key lookup and return the endpoint responsible for the key
-        var responder = await node.LookupKey(request.RequestedResourceId);
+        var responder = await sender.SearchEndpointOfKey(request.RequestedResourceId, nodeState.Local);
         return new ChordResponseMessage() { Responder = responder };
     }
 
     private async Task<IChordResponseMessage> processHealthCheck(IChordRequestMessage request)
-        => await Task.FromResult(new ChordResponseMessage() { Responder = node.Local });
+        => await Task.FromResult(new ChordResponseMessage() { Responder = nodeState.Local });
 
     private async Task<IChordResponseMessage> processInitNodeJoin(IChordRequestMessage request)
     {
@@ -83,30 +89,23 @@ public class ChordNodeRequestReceiver
             false);
 
         return new ChordResponseMessage() {
-            Responder = node.Local,
+            Responder = nodeState.Local,
             ReadyForDataCopy = readyForDataCopy
         };
     }
 
     private async Task<IChordResponseMessage> processCommitNodeJoin(IChordRequestMessage request)
     {
-        // TODO: move this inside the ChordRequestSender
-        var task = sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.UpdateSuccessor,
-                RequesterId = node.NodeId,
-                NewSuccessor = request.NewSuccessor
-            },
-            node.Predecessor);
+        var task = sender.UpdateSuccessor(nodeState.Local, nodeState.Predecessor, request.NewSuccessor);
 
         bool commitSuccessful = await task.TryRun(
             (r) => r.CommitSuccessful,
             (ex) => logger?.LogError(
-                $"Updating the successor of {node.Predecessor.NodeId} failed!\nException:{ex}"),
+                $"Updating the successor of {nodeState.Predecessor.NodeId} failed!\nException:{ex}"),
             false);
 
         return new ChordResponseMessage() {
-            Responder = node.Local,
+            Responder = nodeState.Local,
             CommitSuccessful = commitSuccessful
         };
     }
@@ -120,29 +119,23 @@ public class ChordNodeRequestReceiver
             false);
 
         return new ChordResponseMessage() {
-            Responder = node.Local,
+            Responder = nodeState.Local,
             ReadyForDataCopy = readyForDataCopy
         };
     }
 
     private async Task<IChordResponseMessage> processCommitNodeLeave(IChordRequestMessage request)
     {
-        var task = sender.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.UpdateSuccessor,
-                RequesterId = node.NodeId,
-                NewSuccessor = request.NewSuccessor
-            },
-            node.Predecessor);
+        var task = sender.UpdateSuccessor(nodeState.Local, nodeState.Predecessor, request.NewSuccessor);
 
         bool commitSuccessful = await task.TryRun(
             (r) => r.CommitSuccessful,
             (ex) => logger?.LogError(
-                $"Updating the successor of {node.Predecessor.NodeId} failed!\nException:{ex}"),
+                $"Updating the successor of {nodeState.Predecessor.NodeId} failed!\nException:{ex}"),
             false);
 
         return new ChordResponseMessage() {
-            Responder = node.Local,
+            Responder = nodeState.Local,
             CommitSuccessful = commitSuccessful
         };
     }

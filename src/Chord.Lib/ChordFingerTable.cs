@@ -2,7 +2,21 @@ namespace Chord.Lib;
 
 using KeyLookupFunc = Func<ChordKey, CancellationToken, Task<IChordEndpoint>>;
 
-public class ChordFingerTable
+public interface IChordNodeState
+{
+    IChordEndpoint Local { get; }
+    IChordEndpoint Successor { get; }
+    IChordEndpoint Predecessor { get; }
+
+    void UpdateSuccessor(IChordEndpoint newSuccessor);
+}
+
+public interface IChordNetworkRouter
+{
+    IChordEndpoint FindBestFinger(ChordKey key);
+}
+
+public class ChordFingerTable : IChordNodeState, IChordNetworkRouter
 {
     #region Init
 
