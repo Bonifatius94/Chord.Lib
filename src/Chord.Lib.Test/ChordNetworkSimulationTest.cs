@@ -65,7 +65,7 @@ public class ChordNetworkSimulationTest
         sender.RegisterNodes(nodes.ToDictionary(x => x.NodeId));
         var bootstrapNode = endpoints.First<IChordEndpoint>();
         var bootstrapperMock = Substitute.For<IChordBootstrapper>();
-        bootstrapperMock.FindBootstrapNode()
+        bootstrapperMock.FindBootstrapNode(default, default)
             .ReturnsForAnyArgs(x => Task.FromResult(bootstrapNode));
 
         _logger.WriteLine("Successfully created nodes. Starting node join procedures.");

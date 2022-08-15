@@ -67,7 +67,7 @@ public class ChordNode
                 "Node needs to be in 'Starting' state!");
 
         // phase 0: find an entrypoint into the chord network
-        var bootstrap = await bootstrapper.FindBootstrapNode();
+        var bootstrap = await bootstrapper.FindBootstrapNode(sender, local);
         if (bootstrap == null)
             throw new InvalidOperationException(
                 "Cannot find a bootstrap node! Please try to join again!");

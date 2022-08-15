@@ -22,15 +22,15 @@ namespace Chord.Api.Controllers
                 ipConfig.ChordIpv4Address.ToString(),
                 ipConfig.ChordPort.ToString());
 
-            var requestSender = new HttpChordRequestSender();
+            var httpClient = new HttpChordRequestSender();
             var endpointGenerator = new IPv4EndpointGenerator(
                 ipConfig, (key) => new ChordKey(key, keySpace));
-            var bootstrapper = new ChordBootstrapper(requestSender, endpointGenerator);
+            var bootstrapper = new ChordBootstrapper(endpointGenerator);
 
             // TODO: replace with real worker
             var payloadWorker = new ZeroProtocolPayloadWorker();
             var nodeConfig = new ChordNodeConfiguration();
-            node = new ChordNode(requestSender, payloadWorker, nodeConfig);
+            node = new ChordNode(httpClient, payloadWorker, nodeConfig);
             node.JoinNetwork(localEndpoint, bootstrapper).Wait();
         }
 

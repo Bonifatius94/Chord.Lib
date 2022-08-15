@@ -3,28 +3,40 @@ namespace Chord.Lib;
 public class ChordBootstrapper : IChordBootstrapper
 {
     public ChordBootstrapper(
-        IChordClient sender,
         IExplorableChordEndpointGenerator endpointGenerator,
         int pingTimeoutMillis = 1000,
         int numParallelPings = 128)
     {
-        this.sender = sender;
         this.endpointGenerator = endpointGenerator;
         this.pingTimeoutMillis = pingTimeoutMillis;
         this.numParallelPings = numParallelPings;
     }
 
-    private IChordClient sender;
-    private IExplorableChordEndpointGenerator endpointGenerator;
-    private int pingTimeoutMillis;
-    private int numParallelPings;
+    private readonly IExplorableChordEndpointGenerator endpointGenerator;
+    private readonly int pingTimeoutMillis;
+    private readonly int numParallelPings;
 
-    public async Task<IChordEndpoint> FindBootstrapNode()
+    private static readonly HashSet<ChordHealthStatus> successStates =
+        new HashSet<ChordHealthStatus>() {
+            ChordHealthStatus.Starting,
+            ChordHealthStatus.Idle
+        };
+
+    public async Task<IChordEndpoint> FindBootstrapNode(
+        ChordRequestSender sender, IChordEndpoint local)
     {
         var cancelCallback = new CancellationTokenSource();
-        Func<IChordEndpoint, Task<IChordEndpoint>> ping =
-            async (e) => await pingEndpoint(sender, e, pingTimeoutMillis, cancelCallback.Token);
+        var ping = async (IChordEndpoint receiver) => {
+                var state = await sender.HealthCheck(
+                    local,
+                    receiver,
+                    timeoutInMillis: pingTimeoutMillis,
+                    token: cancelCallback.Token);
+                return successStates.Contains(state) ? receiver : null;
+            };
+
         var allEndpoints = endpointGenerator.GenerateEndpoints();
+        // TODO: don't let local node ping itself
 
         foreach (var endpointsToPing in allEndpoints.Chunk(numParallelPings))
         {
@@ -47,28 +59,5 @@ public class ChordBootstrapper : IChordBootstrapper
         }
 
         return null;
-    }
-
-    private async Task<IChordEndpoint> pingEndpoint(
-        IChordClient client,
-        IChordEndpoint receiver,
-        int timeoutMillis,
-        CancellationToken token)
-    {
-        return await client
-            // TODO: move healthcheck logic to the ChordRequestSender
-            .SendRequest(
-                new ChordRequestMessage() {
-                    Type = ChordRequestType.HealthCheck
-                },
-                receiver)
-            .TryRun(
-                (r) => receiver,
-                (ex) => {},
-                defaultValue: null)
-            .Timeout(
-                timeoutMillis,
-                defaultValue: null,
-                token);
     }
 }

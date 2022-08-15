@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,7 +23,15 @@ public class BootstrapperTest
             IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token = null)
         {
             if (receiver.IpAddress.Equals(successIp))
-                return new ChordResponseMessage() { Responder = receiver };
+            {
+                return new ChordResponseMessage() {
+                    Responder = new ChordEndpoint(
+                        receiver.NodeId,
+                        ChordHealthStatus.Idle,
+                        receiver.IpAddress,
+                        receiver.Port)
+                };
+            }
 
             await Task.Delay(2000);
             throw new TimeoutException($"request for { receiver } timed out!");
@@ -52,6 +61,9 @@ public class BootstrapperTest
     public BootstrapperTest()
     {
         ipConfigMock = Substitute.For<IIpSettings>();
+        ipConfigMock.ChordPort.Returns(9876);
+        ipConfigMock.IPv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
+        ipConfigMock.IPv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
     }
 
     private IIpSettings ipConfigMock;
@@ -60,19 +72,16 @@ public class BootstrapperTest
     [Fact]
     public async Task Test_ShouldFindBootstrapNode_WhenHealthCheckSuccessful()
     {
-        ipConfigMock.ChordPort.Returns(9876);
-        ipConfigMock.IPv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
-        ipConfigMock.IPv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
-
         string expBootstrapIp = "192.168.178.243";
-        var senderMock = new SpecificSuccessfulPingRequestSenderMock(expBootstrapIp);
-
+        var clientMock = new SpecificSuccessfulPingRequestSenderMock(expBootstrapIp);
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
-        var sut = new ChordBootstrapper(senderMock, endpointGen);
-        var bootstrapNode = await sut.FindBootstrapNode();
+        var local = endpointGen.GenerateEndpoints().First();
+        var sender = new ChordRequestSender(clientMock, () => null);
 
-        // TODO: this test fails on GitHub actions, check why it's flaky
+        var sut = new ChordBootstrapper(endpointGen);
+        var bootstrapNode = await sut.FindBootstrapNode(sender, local);
+
         bootstrapNode.Should().NotBeNull();
         bootstrapNode.IpAddress.Should().Be(expBootstrapIp);
     }
@@ -80,16 +89,14 @@ public class BootstrapperTest
     [Fact]
     public async Task Test_ShouldFindNoBootstrapNode_WhenAllPingsTimeOut()
     {
-        ipConfigMock.ChordPort.Returns(9876);
-        ipConfigMock.IPv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
-        ipConfigMock.IPv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
-
-        var senderMock = new AllPingsTimeoutRequestSenderMock();
-
+        var clientMock = new AllPingsTimeoutRequestSenderMock();
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
-        var sut = new ChordBootstrapper(senderMock, endpointGen);
-        var bootstrapNode = await sut.FindBootstrapNode();
+        var local = endpointGen.GenerateEndpoints().First();
+        var sender = new ChordRequestSender(clientMock, () => null);
+
+        var sut = new ChordBootstrapper(endpointGen);
+        var bootstrapNode = await sut.FindBootstrapNode(sender, local);
 
         bootstrapNode.Should().BeNull();
     }
@@ -97,16 +104,14 @@ public class BootstrapperTest
     [Fact]
     public async Task Test_ShouldFindNoBootstrapNode_WhenAllPingsThrowAnException()
     {
-        ipConfigMock.ChordPort.Returns(9876);
-        ipConfigMock.IPv4NetworkId.Returns(IPAddress.Parse("192.168.178.0"));
-        ipConfigMock.IPv4Broadcast.Returns(IPAddress.Parse("192.168.178.255"));
-
-        var senderMock = new AllPingsThrowRequestSenderMock();
-
+        var clientMock = new AllPingsThrowRequestSenderMock();
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
-        var sut = new ChordBootstrapper(senderMock, endpointGen);
-        var bootstrapNode = await sut.FindBootstrapNode();
+        var local = endpointGen.GenerateEndpoints().First();
+        var sender = new ChordRequestSender(clientMock, () => null);
+
+        var sut = new ChordBootstrapper(endpointGen);
+        var bootstrapNode = await sut.FindBootstrapNode(sender, local);
 
         bootstrapNode.Should().BeNull();
     }

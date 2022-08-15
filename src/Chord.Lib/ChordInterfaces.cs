@@ -74,7 +74,9 @@ public interface IExplorableChordEndpointGenerator
 
 public interface IChordBootstrapper
 {
-    Task<IChordEndpoint> FindBootstrapNode();
+    Task<IChordEndpoint> FindBootstrapNode(
+        ChordRequestSender sender,
+        IChordEndpoint local);
 }
 
 public interface IIpSettings
