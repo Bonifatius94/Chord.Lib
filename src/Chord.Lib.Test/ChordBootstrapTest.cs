@@ -57,7 +57,7 @@ public class BootstrapperTest
     private IIpSettings ipConfigMock;
     private const int keySpace = 100000;
 
-    [Fact(Skip="test is flaky, fix this later")]
+    [Fact]
     public async Task Test_ShouldFindBootstrapNode_WhenHealthCheckSuccessful()
     {
         ipConfigMock.ChordPort.Returns(9876);
@@ -77,7 +77,7 @@ public class BootstrapperTest
         bootstrapNode.IpAddress.Should().Be(expBootstrapIp);
     }
 
-    [Fact(Skip="test is flaky, fix this later")]
+    [Fact]
     public async Task Test_ShouldFindNoBootstrapNode_WhenAllPingsTimeOut()
     {
         ipConfigMock.ChordPort.Returns(9876);
@@ -94,7 +94,7 @@ public class BootstrapperTest
         bootstrapNode.Should().BeNull();
     }
 
-    [Fact(Skip="test is flaky, fix this later")]
+    [Fact]
     public async Task Test_ShouldFindNoBootstrapNode_WhenAllPingsThrowAnException()
     {
         ipConfigMock.ChordPort.Returns(9876);
