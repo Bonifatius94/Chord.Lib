@@ -1,8 +1,8 @@
-namespace Chord.Lib;
+namespace Chord.Lib.Impl;
 
-public class ChordEndpoint : IChordEndpoint
+public class IPv4Endpoint : IChordEndpoint
 {
-    public ChordEndpoint(
+    public IPv4Endpoint(
         string ipAddress,
         string port,
         BigInteger keySpace,
@@ -14,7 +14,7 @@ public class ChordEndpoint : IChordEndpoint
         Port = port;
     }
 
-    public ChordEndpoint(
+    public IPv4Endpoint(
         ChordKey nodeId,
         ChordHealthStatus state,
         string ipAddress,
@@ -33,7 +33,7 @@ public class ChordEndpoint : IChordEndpoint
     public string Port { get; private set; }
 
     public IChordEndpoint DeepClone()
-        => new ChordEndpoint(NodeId, State, IpAddress, Port);
+        => new IPv4Endpoint(NodeId, State, IpAddress, Port);
 
     public ChordKey PickNewRandomId()
         => NodeId = ChordKey.PickRandom(NodeId.KeySpace);

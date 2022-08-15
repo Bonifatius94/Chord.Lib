@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
+using Chord.Lib.Impl;
 using FluentAssertions;
 using xRetry;
 using Xunit;
@@ -20,7 +21,7 @@ public class TableCreationTest
         const int MAX_KEY = 1000000;
         const int NUM_NODES = 1000;
         var chordNodes = Enumerable.Range(0, NUM_NODES)
-            .Select(i => new ChordEndpoint(null, null, MAX_KEY))
+            .Select(i => new IPv4Endpoint(null, null, MAX_KEY))
             .ToList();
         var (local, successor) = (chordNodes[0], chordNodes[1]);
         var networkNodes = chordNodes.Except(new [] { local }).ToList();
@@ -74,7 +75,7 @@ public class FingerLookupTest
 
     #endregion Init
 
-    Func<BigInteger, IChordEndpoint> endpointOfKey = (k) => new ChordEndpoint(
+    Func<BigInteger, IChordEndpoint> endpointOfKey = (k) => new IPv4Endpoint(
             new ChordKey(k, KeySpace), ChordHealthStatus.Idle, null, null);
 
     [Fact]
@@ -200,7 +201,7 @@ public class FingerLookupTest
 public class UpdateSuccessorAndPredecessorTest
 {
     private const int keySpace = 100000;
-    Func<BigInteger, IChordEndpoint> endpointOfKey = (k) => new ChordEndpoint(
+    Func<BigInteger, IChordEndpoint> endpointOfKey = (k) => new IPv4Endpoint(
             new ChordKey(k, keySpace), ChordHealthStatus.Idle, null, null);
 
     public void Test_ShouldYieldAssignedSuccessor_WhenUpdatingIt()

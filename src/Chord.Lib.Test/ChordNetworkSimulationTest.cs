@@ -44,7 +44,7 @@ public class ChordNetworkSimulationTest
         _logger.WriteLine($"Simulating a chord network with { testNodesCount } nodes, timeout={ testTimeoutSecs }s");
 
         var endpoints = Enumerable.Range(1, testNodesCount)
-                .Select(x => new ChordEndpoint(
+                .Select(x => new IPv4Endpoint(
                     ChordKey.PickRandom(keySpace),
                     ChordHealthStatus.Starting,
                     $"10.0.0.{ x }",

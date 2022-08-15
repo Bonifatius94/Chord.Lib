@@ -16,7 +16,7 @@ namespace Chord.Api.Controllers
         {
             const long keySpace = long.MaxValue;
 
-            var localEndpoint = new ChordEndpoint(
+            var localEndpoint = new IPv4Endpoint(
                 ChordKey.PickRandom(keySpace),
                 ChordHealthStatus.Starting,
                 ipConfig.ChordIpv4Address.ToString(),

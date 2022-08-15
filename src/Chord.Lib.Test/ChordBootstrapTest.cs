@@ -25,7 +25,7 @@ public class BootstrapperTest
             if (receiver.IpAddress.Equals(successIp))
             {
                 return new ChordResponseMessage() {
-                    Responder = new ChordEndpoint(
+                    Responder = new IPv4Endpoint(
                         receiver.NodeId,
                         ChordHealthStatus.Idle,
                         receiver.IpAddress,

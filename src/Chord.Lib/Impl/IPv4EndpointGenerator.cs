@@ -33,8 +33,8 @@ public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
         var chordPort = ipConfig.ChordPort;
         var (firstIp, lastIp) = getFirstAndLastAddress();
         var allEndpoints = BigIntEnumerable.Range(firstIp, lastIp)
-            .Select(addr => new ChordEndpoint(
-                newKey(-1),
+            .Select(addr => new IPv4Endpoint(
+                newKey(0),
                 ChordHealthStatus.Questionable,
                 addr.FromBigInt().ToString(),
                 chordPort.ToString()
