@@ -2,9 +2,11 @@ namespace Chord.Lib;
 
 public class ChordRequestSender
 {
-    // TODO: synchronize the node state with an Actor-model event sourcing approach
+    // TODO: synchronize the node state with an event sourcing approach
 
-    public ChordRequestSender(IChordClient client, Func<IChordNetworkRouter> getRouter)
+    public ChordRequestSender(
+        IChordClient client,
+        Func<IChordNetworkRouter> getRouter)
     {
         this.client = client;
         this.getRouter = getRouter;
@@ -29,6 +31,7 @@ public class ChordRequestSender
             var successor = await SearchEndpointOfKey(
                 local.NodeId, local, bootstrapNode);
 
+            // found a successor and the local endpoint's id is unique
             if (successor != null && local.NodeId != successor.NodeId)
                 return successor;
 
@@ -39,7 +42,8 @@ public class ChordRequestSender
     public async Task<IChordResponseMessage> InitiateNetworkJoin(
             IChordEndpoint local,
             IChordEndpoint successor)
-        => await client.SendRequest(
+        => await client
+            .SendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.InitNodeJoin,
                     RequesterId = local.NodeId
@@ -50,7 +54,8 @@ public class ChordRequestSender
     public async Task<IChordResponseMessage> CommitNetworkJoin(
             IChordEndpoint local,
             IChordEndpoint successor)
-        => await client.SendRequest(
+        => await client
+            .SendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.CommitNodeJoin,
                     RequesterId = local.NodeId,
@@ -62,7 +67,8 @@ public class ChordRequestSender
     public async Task<IChordResponseMessage> InitiateNetworkLeave(
             IChordEndpoint local,
             IChordEndpoint successor)
-        => await client.SendRequest(
+        => await client
+            .SendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.InitNodeLeave,
                     RequesterId = local.NodeId
@@ -74,7 +80,8 @@ public class ChordRequestSender
             IChordEndpoint local,
             IChordEndpoint successor,
             IChordEndpoint predecessor)
-        => await client.SendRequest(
+        => await client
+            .SendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.CommitNodeLeave,
                     RequesterId = local.NodeId,
@@ -123,14 +130,15 @@ public class ChordRequestSender
                 failStatus);
 
     public async Task<IChordResponseMessage> UpdateSuccessor(
-        IChordEndpoint local, IChordEndpoint predecessor, IChordEndpoint newSuccessor)
-    {
-        return await client.SendRequest(
-            new ChordRequestMessage() {
-                Type = ChordRequestType.UpdateSuccessor,
-                RequesterId = local.NodeId,
-                NewSuccessor = newSuccessor
-            },
-            predecessor);
-    }
+            IChordEndpoint local,
+            IChordEndpoint predecessor,
+            IChordEndpoint newSuccessor)
+        => await client
+            .SendRequest(
+                new ChordRequestMessage() {
+                    Type = ChordRequestType.UpdateSuccessor,
+                    RequesterId = local.NodeId,
+                    NewSuccessor = newSuccessor
+                },
+                predecessor);
 }
