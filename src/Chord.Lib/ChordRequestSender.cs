@@ -14,7 +14,7 @@ public class ChordRequestSender
 
     private readonly IChordClient client;
 
-    private readonly Func<IChordNetworkRouter> getRouter;
+    private readonly Func<IChordNetworkRouter> getRouter; // TODO: get rid of this, don't re-create the finger table in ChordNode
     private IChordNetworkRouter router => getRouter();
 
     // TODO: add fault tolerance with TryRun()

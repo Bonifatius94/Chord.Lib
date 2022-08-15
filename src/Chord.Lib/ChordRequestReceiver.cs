@@ -31,7 +31,7 @@ public class ChordRequestReceiver
         };
     }
 
-    private readonly Func<IChordNodeState> getNodeState;
+    private readonly Func<IChordNodeState> getNodeState; // TODO: get rid of this, don't re-create the finger table in ChordNode
     private IChordNodeState nodeState => getNodeState();
 
     private readonly ChordRequestSender sender;
