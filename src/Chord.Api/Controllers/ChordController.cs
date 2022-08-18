@@ -30,8 +30,8 @@ namespace Chord.Api.Controllers
             // TODO: replace with real worker
             var payloadWorker = new ZeroProtocolPayloadWorker();
             var nodeConfig = new ChordNodeConfiguration();
-            node = new ChordNode(httpClient, payloadWorker, nodeConfig);
-            node.JoinNetwork(localEndpoint, bootstrapper).Wait();
+            node = new ChordNode(localEndpoint, httpClient, payloadWorker, nodeConfig);
+            node.JoinNetwork(bootstrapper).Wait();
         }
 
         private static ChordNode node;

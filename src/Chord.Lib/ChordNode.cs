@@ -30,6 +30,7 @@ public class ChordNode
     /// <param name="config">A set of configuration settings
     /// controlling the node behavior.</param>
     public ChordNode(
+        IChordEndpoint local,
         IChordClient client,
         IChordPayloadWorker payloadWorker,
         ChordNodeConfiguration config,
@@ -38,11 +39,14 @@ public class ChordNode
         this.config = config;
         this.payloadWorker = payloadWorker;
 
-        sender = new ChordRequestSender(client, () => fingerTable);
-        receiver = new ChordRequestReceiver(() => fingerTable, sender, payloadWorker, logger);
+        nodeState = new ChordNodeState(local);
+        fingerTable = new ChordFingerTable((k, t) => null, nodeState);
+        sender = new ChordRequestSender(client, fingerTable);
+        receiver = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
         backgroundTaskCallback = new CancellationTokenSource();
     }
 
+    private readonly ChordNodeState nodeState;
     private readonly ChordNodeConfiguration config;
     private readonly ChordRequestReceiver receiver;
     private readonly ChordRequestSender sender;
@@ -52,16 +56,19 @@ public class ChordNode
 
     #endregion Init
 
-    public ChordKey NodeId => fingerTable.Local.NodeId;
+    public IChordEndpoint Local => nodeState.Local;
+    public ChordKey NodeId => Local.NodeId;
+    public ChordHealthStatus NodeState => Local.State;
 
     public async Task<IChordResponseMessage> ProcessRequest(
             IChordRequestMessage request)
         => await receiver.ProcessAsync(request);
 
-    public async Task JoinNetwork(IChordEndpoint local, IChordBootstrapper bootstrapper)
+    public async Task JoinNetwork(IChordBootstrapper bootstrapper)
     {
         // TODO: decouple the error handling with Action callbacks
 
+        var local = Local;
         if (local.State != ChordHealthStatus.Starting)
             throw new InvalidOperationException(
                 "Node needs to be in 'Starting' state!");
@@ -74,6 +81,9 @@ public class ChordNode
 
         // phase 1: determine the successor by a key lookup
         var successor = await sender.IntiateSuccessor(bootstrap, local);
+        if (successor == null)
+            throw new InvalidOperationException(
+                "Could not find a successor. Please try again!");
 
         // phase 2: initiate the join process
         var response = await sender.InitiateNetworkJoin(local, successor);
@@ -90,10 +100,12 @@ public class ChordNode
 
         // apply the node settings
         local.UpdateState(ChordHealthStatus.Idle);
+        nodeState.UpdateSuccessor(successor);
+        nodeState.UpdatePredecessor(response.Predecessor);
         fingerTable = new ChordFingerTable(
             response.CachedFingerTable.ToDictionary(x => x.NodeId),
             (k, t) => sender.SearchEndpointOfKey(k, local),
-            local, successor, response.Predecessor);
+            nodeState);
 
         if (!fingerTable.AllFingers.Any())
             await fingerTable.BuildTable();
@@ -106,13 +118,13 @@ public class ChordNode
     public async Task LeaveNetwork()
     {
         // phase 1: initiate the leave process
-        fingerTable.Local.UpdateState(ChordHealthStatus.Leaving);
+        Local.UpdateState(ChordHealthStatus.Leaving);
 
         // TODO: this might not be necessary when following an event sourcing approach
         //       that locks the state when processing mutable events
-        var local = fingerTable.Local.DeepClone();
-        var successor = fingerTable.Successor.DeepClone();
-        var predecessor = fingerTable.Predecessor.DeepClone();
+        var local = Local.DeepClone();
+        var successor = nodeState.Successor.DeepClone();
+        var predecessor = nodeState.Predecessor.DeepClone();
 
         var response = await sender.InitiateNetworkLeave(local, successor);
         if (!response.ReadyForDataCopy)
@@ -144,6 +156,8 @@ public class ChordNode
             {
                 Task.Delay(config.MonitorHealthSchedule * 1000).Wait();
                 monitorFingerHealth(token);
+                if (token.IsCancellationRequested)
+                    return;
             }
         });
 
@@ -161,43 +175,58 @@ public class ChordNode
         await Task.WhenAll(new Task[] { monitorTask, updateTableTask });
     }
 
-    private void monitorFingerHealth(CancellationToken token)
+    private static readonly ISet<ChordHealthStatus> unhealthyStates =
+        new HashSet<ChordHealthStatus>() {
+            ChordHealthStatus.Questionable,
+            ChordHealthStatus.Dead
+        };
+
+    private async Task monitorFingerHealth(CancellationToken token)
     {
         var cachedFingers = fingerTable.AllFingers.ToList();
 
-        // perform a first health check for all finger nodes
-        updateHealth(cachedFingers, config.HealthCheckTimeoutMillis, ChordHealthStatus.Questionable);
-        if (token.IsCancellationRequested)
-            return;
+        var firstHealthCheck = async (IEnumerable<IChordEndpoint> fingers, CancellationToken token)
+            => await queryHealthStates(
+                fingers,
+                config.HealthCheckTimeoutMillis,
+                ChordHealthStatus.Questionable,
+                token);
 
-        // perform a second health check for all questionable finger nodes
-        var questionableFingers = cachedFingers
-            .Where(x => x.State == ChordHealthStatus.Questionable).ToList();
-        updateHealth(questionableFingers, config.HealthCheckTimeoutMillis / 2, ChordHealthStatus.Dead);
-        if (token.IsCancellationRequested)
-            return;
+        var secondHealthCheck = async (IEnumerable<IChordEndpoint> fingers, CancellationToken token)
+            => await queryHealthStates(
+                fingers,
+                config.HealthCheckTimeoutMillis,
+                ChordHealthStatus.Dead,
+                token);
+
+        var healthStatesOfFingers = await firstHealthCheck(cachedFingers, token);
+        foreach ((var finger, var newState) in healthStatesOfFingers)
+            finger.UpdateState(newState);
+
+        var questionableFingers = healthStatesOfFingers
+            .Where(x => unhealthyStates.Contains(x.Item2))
+            .Select(x => x.Item1)
+            .ToList();
+
+        healthStatesOfFingers = await secondHealthCheck(questionableFingers, token);
+        foreach ((var finger, var newState) in healthStatesOfFingers)
+            finger.UpdateState(newState);
     }
 
-    private void updateHealth(
-        List<IChordEndpoint> fingers,
+    private async Task<IEnumerable<(IChordEndpoint, ChordHealthStatus)>> queryHealthStates(
+        IEnumerable<IChordEndpoint> fingers,
         int timeoutSecs, 
-        ChordHealthStatus failStatus)
+        ChordHealthStatus failStatus,
+        CancellationToken token)
     {
-        // run health checks for each finger in parallel
-        var healthCheckTasks = fingerTable.AllFingers
-            .Select(receiver => Task.Run(async () => new { 
-                NodeId = receiver.NodeId,
-                Health = await sender.HealthCheck(
-                    fingerTable.Local, receiver, failStatus, timeoutSecs)
-            })).ToArray();
-        Task.WaitAll(healthCheckTasks);
+        var healthCheckTasks = fingers
+            .Select(async finger => (
+                Endpoint: finger,
+                HealthState: await sender.HealthCheck(
+                    Local, finger, failStatus, timeoutSecs, token)
+            ));
 
-        // collect health check results
-        var healthStates = healthCheckTasks.Select(x => x.Result)
-            .ToDictionary(x => x.NodeId, x => x.Health);
-
-        // update finger states
-        fingers.ForEach(finger => finger.UpdateState(healthStates[finger.NodeId]));
+        return await Task.WhenAll(healthCheckTasks);
     }
 
     #endregion BackgroundTasks

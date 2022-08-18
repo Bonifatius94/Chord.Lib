@@ -6,16 +6,14 @@ public class ChordRequestSender
 
     public ChordRequestSender(
         IChordClient client,
-        Func<IChordNetworkRouter> getRouter)
+        IChordNetworkRouter router)
     {
         this.client = client;
-        this.getRouter = getRouter;
+        this.router = router;
     }
 
     private readonly IChordClient client;
-
-    private readonly Func<IChordNetworkRouter> getRouter; // TODO: get rid of this, don't re-create the finger table in ChordNode
-    private IChordNetworkRouter router => getRouter();
+    private readonly IChordNetworkRouter router;
 
     // TODO: add fault tolerance with TryRun()
     // TODO: make each function cancelable by token argument

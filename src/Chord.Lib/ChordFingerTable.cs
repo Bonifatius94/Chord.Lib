@@ -2,13 +2,20 @@ namespace Chord.Lib;
 
 using KeyLookupFunc = Func<ChordKey, CancellationToken, Task<IChordEndpoint>>;
 
-public interface IChordNodeState
+public class ChordNodeState
 {
-    IChordEndpoint Local { get; }
-    IChordEndpoint Successor { get; }
-    IChordEndpoint Predecessor { get; }
+    public ChordNodeState(IChordEndpoint local)
+        => Local = local;
 
-    void UpdateSuccessor(IChordEndpoint newSuccessor);
+    public IChordEndpoint Local { get; private set; }
+    public IChordEndpoint Successor { get; private set; }
+    public IChordEndpoint Predecessor { get; private set; }
+
+    public void UpdateSuccessor(IChordEndpoint newSuccessor)
+        => Successor = newSuccessor;
+
+    public void UpdatePredecessor(IChordEndpoint newPredecessor)
+        => Predecessor = newPredecessor;
 }
 
 public interface IChordNetworkRouter
@@ -16,32 +23,26 @@ public interface IChordNetworkRouter
     IChordEndpoint FindBestFinger(ChordKey key);
 }
 
-public class ChordFingerTable : IChordNodeState, IChordNetworkRouter
+public class ChordFingerTable : IChordNetworkRouter
 {
     #region Init
 
     public ChordFingerTable(
         KeyLookupFunc lookupKeyAsync,
-        IChordEndpoint local,
-        IChordEndpoint successor = null,
-        IChordEndpoint predecessor = null,
+        ChordNodeState state,
         int updateTableTimeoutMillis = 600)
         : this(new ConcurrentDictionary<ChordKey, IChordEndpoint>(),
-            lookupKeyAsync, local, successor, predecessor, updateTableTimeoutMillis) { }
+            lookupKeyAsync, state, updateTableTimeoutMillis) { }
 
     public ChordFingerTable(
         IDictionary<ChordKey, IChordEndpoint> fingers,
         KeyLookupFunc lookupKeyAsync,
-        IChordEndpoint local,
-        IChordEndpoint successor = null,
-        IChordEndpoint predecessor = null,
+        ChordNodeState state,
         int updateTableTimeoutMillis = 600)
     {
         this.fingerTable = new ConcurrentDictionary<ChordKey, IChordEndpoint>(fingers);
         this.lookupKeyAsync = lookupKeyAsync;
-        this.Local = local;
-        this.Successor = successor;
-        this.Predecessor = predecessor;
+        this.state = state;
         this.updateTableTimeoutMillis = updateTableTimeoutMillis;
     }
 
@@ -50,9 +51,10 @@ public class ChordFingerTable : IChordNodeState, IChordNetworkRouter
 
     #endregion Init
 
-    public IChordEndpoint Local { get; private set; }
-    public IChordEndpoint Successor { get; private set; }
-    public IChordEndpoint Predecessor { get; private set; }
+    private ChordNodeState state;
+    private IChordEndpoint Local => state.Local;
+    private IChordEndpoint Successor => state.Successor;
+    private IChordEndpoint Predecessor => state.Predecessor;
 
     private IDictionary<ChordKey, IChordEndpoint> fingerTable = 
         new ConcurrentDictionary<ChordKey, IChordEndpoint>();
@@ -60,11 +62,11 @@ public class ChordFingerTable : IChordNodeState, IChordNetworkRouter
     public IEnumerable<IChordEndpoint> AllFingers
         => fingerTable.Values;
 
-    public void UpdateSuccessor(IChordEndpoint newSuccessor)
-        => Successor = newSuccessor;
+    // public void UpdateSuccessor(IChordEndpoint newSuccessor)
+    //     => Successor = newSuccessor;
 
-    public void UpdatePredecessor(IChordEndpoint newPredecessor)
-        => Predecessor = newPredecessor;
+    // public void UpdatePredecessor(IChordEndpoint newPredecessor)
+    //     => Predecessor = newPredecessor;
 
     #region Forwarding
 

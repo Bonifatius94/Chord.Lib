@@ -27,12 +27,13 @@ public class TableCreationTest
         var networkNodes = chordNodes.Except(new [] { local }).ToList();
 
         // act
+        var nodeState = new ChordNodeState(local);
+        nodeState.UpdateSuccessor(successor);
         var fingerTable = new ChordFingerTable(
             (k, t) => Task.FromResult(
                 networkNodes.Where(x => x.NodeId >= k).MinBy(x => x.NodeId)
                 ?? networkNodes.MinBy(x => x.NodeId) as IChordEndpoint),
-            local,
-            successor);
+            nodeState);
         await fingerTable.BuildTable();
 
         // assert
@@ -61,11 +62,12 @@ public class FingerLookupTest
         var local = endpoints[0];
         var successor = endpoints[1];
 
+        var nodeState = new ChordNodeState(local);
+        nodeState.UpdateSuccessor(successor);
         var fingerTable = new ChordFingerTable(
             (k, t) => Task.FromResult(
                 endpoints.MinBy(x => x.NodeId - k)),
-            local,
-            successor);
+            nodeState);
 
         fingerTable.BuildTable().Wait();
         return fingerTable;
@@ -176,10 +178,12 @@ public class FingerLookupTest
     [Fact]
     public void Test_ShouldThrow_WhenSuccessorIsNotInitialized()
     {
+        var nodeState = new ChordNodeState(endpointOfKey(1));
         var fingerTable = new ChordFingerTable(
             new Dictionary<ChordKey, IChordEndpoint>() {
-                { new ChordKey(1, KeySpace), endpointOfKey(1) } },
-            (k, t) => null, endpointOfKey(1));
+                { new ChordKey(1, KeySpace), endpointOfKey(1) }
+            },
+            (k, t) => null, nodeState);
 
         var lookupKey = new ChordKey(11, KeySpace);
         fingerTable.Invoking(x => x.FindBestFinger(lookupKey))
@@ -189,8 +193,10 @@ public class FingerLookupTest
     [Fact]
     public void Test_ShouldThrow_WhenFingerTableIsNotInitialized()
     {
+        var nodeState = new ChordNodeState(endpointOfKey(1));
+        nodeState.UpdateSuccessor(endpointOfKey(2));
         var fingerTable = new ChordFingerTable(
-            (k, t) => null, endpointOfKey(1), endpointOfKey(2));
+            (k, t) => null, nodeState);
 
         var lookupKey = new ChordKey(11, KeySpace);
         fingerTable.Invoking(x => x.FindBestFinger(lookupKey))
@@ -198,7 +204,7 @@ public class FingerLookupTest
     }
 }
 
-public class UpdateSuccessorAndPredecessorTest
+public class NodeState_UpdateSuccessorAndPredecessorTest
 {
     private const int keySpace = 100000;
     Func<BigInteger, IChordEndpoint> endpointOfKey = (k) => new IPv4Endpoint(
@@ -206,31 +212,23 @@ public class UpdateSuccessorAndPredecessorTest
 
     public void Test_ShouldYieldAssignedSuccessor_WhenUpdatingIt()
     {
-        var fingerTable = new ChordFingerTable(
-            (k, t) => null,
-            endpointOfKey(1),
-            endpointOfKey(2),
-            endpointOfKey(3));
+        var nodeState = new ChordNodeState(endpointOfKey(1));
 
-        fingerTable.UpdateSuccessor(endpointOfKey(4));
+        nodeState.UpdateSuccessor(endpointOfKey(4));
 
-        fingerTable.Successor.NodeId.Should().BeEquivalentTo(new ChordKey(4, keySpace));
-        fingerTable.Local.NodeId.Should().BeEquivalentTo(new ChordKey(1, keySpace));
-        fingerTable.Predecessor.NodeId.Should().BeEquivalentTo(new ChordKey(3, keySpace));
+        nodeState.Local.NodeId.Should().BeEquivalentTo(new ChordKey(1, keySpace));
+        nodeState.Successor.NodeId.Should().BeEquivalentTo(new ChordKey(4, keySpace));
+        nodeState.Predecessor.Should().BeNull();
     }
 
     public void Test_ShouldYieldAssignedPredecessor_WhenUpdatingIt()
     {
-        var fingerTable = new ChordFingerTable(
-            (k, t) => null,
-            endpointOfKey(1),
-            endpointOfKey(2),
-            endpointOfKey(3));
+        var nodeState = new ChordNodeState(endpointOfKey(1));
 
-        fingerTable.UpdatePredecessor(endpointOfKey(4));
+        nodeState.UpdatePredecessor(endpointOfKey(4));
 
-        fingerTable.Predecessor.NodeId.Should().BeEquivalentTo(new ChordKey(4, keySpace));
-        fingerTable.Local.NodeId.Should().BeEquivalentTo(new ChordKey(1, keySpace));
-        fingerTable.Successor.NodeId.Should().BeEquivalentTo(new ChordKey(2, keySpace));
+        nodeState.Local.NodeId.Should().BeEquivalentTo(new ChordKey(1, keySpace));
+        nodeState.Successor.Should().BeNull();
+        nodeState.Predecessor.NodeId.Should().BeEquivalentTo(new ChordKey(4, keySpace));
     }
 }

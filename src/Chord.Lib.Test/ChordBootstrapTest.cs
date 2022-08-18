@@ -77,7 +77,7 @@ public class BootstrapperTest
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
         var local = endpointGen.GenerateEndpoints().First();
-        var sender = new ChordRequestSender(clientMock, () => null);
+        var sender = new ChordRequestSender(clientMock, null);
 
         var sut = new ChordBootstrapper(endpointGen);
         var bootstrapNode = await sut.FindBootstrapNode(sender, local);
@@ -93,7 +93,7 @@ public class BootstrapperTest
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
         var local = endpointGen.GenerateEndpoints().First();
-        var sender = new ChordRequestSender(clientMock, () => null);
+        var sender = new ChordRequestSender(clientMock, null);
 
         var sut = new ChordBootstrapper(endpointGen);
         var bootstrapNode = await sut.FindBootstrapNode(sender, local);
@@ -108,7 +108,7 @@ public class BootstrapperTest
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
         var local = endpointGen.GenerateEndpoints().First();
-        var sender = new ChordRequestSender(clientMock, () => null);
+        var sender = new ChordRequestSender(clientMock, null);
 
         var sut = new ChordBootstrapper(endpointGen);
         var bootstrapNode = await sut.FindBootstrapNode(sender, local);

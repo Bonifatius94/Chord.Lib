@@ -10,12 +10,12 @@ public class ChordRequestReceiver
     #region Init
 
     public ChordRequestReceiver(
-        Func<IChordNodeState> getNodeState,
+        ChordNodeState nodeState,
         ChordRequestSender sender,
         IChordPayloadWorker worker,
         ILogger logger = null)
     {
-        this.getNodeState = getNodeState;
+        this.nodeState = nodeState;
         this.sender = sender;
         this.worker = worker;
         this.logger = logger;
@@ -31,9 +31,7 @@ public class ChordRequestReceiver
         };
     }
 
-    private readonly Func<IChordNodeState> getNodeState; // TODO: get rid of this, don't re-create the finger table in ChordNode
-    private IChordNodeState nodeState => getNodeState();
-
+    private readonly ChordNodeState nodeState;
     private readonly ChordRequestSender sender;
     private readonly IChordPayloadWorker worker;
     private readonly ILogger logger;
@@ -101,7 +99,7 @@ public class ChordRequestReceiver
         bool commitSuccessful = await task.TryRun(
             (r) => r.CommitSuccessful,
             (ex) => logger?.LogError(
-                $"Updating the successor of {nodeState.Predecessor.NodeId} failed!\nException:{ex}"),
+                $"Updating the successor of {nodeState.Predecessor?.NodeId} failed!\nException:{ex}"),
             false);
 
         return new ChordResponseMessage() {
@@ -131,7 +129,7 @@ public class ChordRequestReceiver
         bool commitSuccessful = await task.TryRun(
             (r) => r.CommitSuccessful,
             (ex) => logger?.LogError(
-                $"Updating the successor of {nodeState.Predecessor.NodeId} failed!\nException:{ex}"),
+                $"Updating the successor of {nodeState.Predecessor?.NodeId} failed!\nException:{ex}"),
             false);
 
         return new ChordResponseMessage() {

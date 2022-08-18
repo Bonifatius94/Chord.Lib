@@ -23,7 +23,54 @@ public static class TaskErrorHandlingEx
             onError(ex);
             return defaultValue;
         }
-    } 
+    }
+
+    public static async Task TryRepeat(
+        this Func<Task> taskFactory,
+        IList<int> repetitionTimeouts,
+        Action<Exception> onError = null)
+    {
+        int errorCount = 0;
+
+        do
+        {
+            var task = taskFactory();
+
+            try {
+                await task;
+            } catch (Exception ex) {
+                onError?.Invoke(ex);
+                await Task.Delay(repetitionTimeouts[errorCount++]);
+            }
+        }
+        while (errorCount < repetitionTimeouts.Count);
+    }
+
+    public static async Task<TResult> TryRepeat<TResult>(
+        this Func<Task<TResult>> taskFactory,
+        IList<int> repetitionTimeouts,
+        TResult defaultValue,
+        Action<Exception> onError = null)
+    {
+        int errorCount = 0;
+        Action<Exception> onErrorOverride = async (ex) => {
+            onError?.Invoke(ex);
+            await Task.Delay(repetitionTimeouts[errorCount]);
+            errorCount++;
+        };
+
+        do
+        {
+            var task = taskFactory();
+            int errorsBefore = errorCount;
+            var result = await task.TryRun(onErrorOverride, defaultValue);
+            if (errorCount == errorsBefore)
+                return result;
+        }
+        while (errorCount < repetitionTimeouts.Count);
+
+        return defaultValue;
+    }
 }
 
 public static class TaskTimeoutEx
