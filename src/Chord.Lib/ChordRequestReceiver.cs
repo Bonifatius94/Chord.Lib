@@ -94,7 +94,8 @@ public class ChordRequestReceiver
 
     private async Task<IChordResponseMessage> processCommitNodeJoin(IChordRequestMessage request)
     {
-        var task = sender.UpdateSuccessor(nodeState.Local, nodeState.Predecessor, request.NewSuccessor);
+        var task = sender.UpdateSuccessor(
+            nodeState.Local, nodeState.Predecessor, request.NewSuccessor);
 
         bool commitSuccessful = await task.TryRun(
             (r) => r.CommitSuccessful,
@@ -102,9 +103,13 @@ public class ChordRequestReceiver
                 $"Updating the successor of {nodeState.Predecessor?.NodeId} failed!\nException:{ex}"),
             false);
 
+        if (commitSuccessful)
+            nodeState.UpdatePredecessor(request.NewSuccessor);
+
         return new ChordResponseMessage() {
             Responder = nodeState.Local,
-            CommitSuccessful = commitSuccessful
+            CommitSuccessful = commitSuccessful,
+            Predecessor = nodeState.Predecessor
         };
     }
 

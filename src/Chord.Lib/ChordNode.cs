@@ -57,6 +57,8 @@ public class ChordNode
     #endregion Init
 
     public IChordEndpoint Local => nodeState.Local;
+    public IChordEndpoint Successor => nodeState.Successor;
+    public IChordEndpoint Predecessor => nodeState.Predecessor;
     public ChordKey NodeId => Local.NodeId;
     public ChordHealthStatus NodeState => Local.State;
 
@@ -70,8 +72,9 @@ public class ChordNode
 
         var local = Local;
         if (local.State != ChordHealthStatus.Starting)
-            throw new InvalidOperationException(
-                "Node needs to be in 'Starting' state!");
+            return;
+            // throw new InvalidOperationException(
+            //     "Node needs to be in 'Starting' state!");
 
         // phase 0: find an entrypoint into the chord network
         var bootstrap = await bootstrapper.FindBootstrapNode(sender, local);
@@ -112,7 +115,7 @@ public class ChordNode
 
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
-        createBackgroundTasks(backgroundTaskCallback.Token).Start();
+        createBackgroundTasks(backgroundTaskCallback.Token);
     }
 
     public async Task LeaveNetwork()

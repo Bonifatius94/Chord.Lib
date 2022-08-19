@@ -131,7 +131,16 @@ public class ChordRequestSender
             IChordEndpoint local,
             IChordEndpoint predecessor,
             IChordEndpoint newSuccessor)
-        => await client
+    {
+        // base case for creating a Chord ring with only 2 nodes
+        if (predecessor == null)
+            return await Task.FromResult(new ChordResponseMessage() {
+                Responder = local,
+                CommitSuccessful = true,
+                Predecessor = local
+            });
+
+        return await client
             .SendRequest(
                 new ChordRequestMessage() {
                     Type = ChordRequestType.UpdateSuccessor,
@@ -139,4 +148,5 @@ public class ChordRequestSender
                     NewSuccessor = newSuccessor
                 },
                 predecessor);
+    }
 }

@@ -38,6 +38,7 @@ public static class TaskErrorHandlingEx
 
             try {
                 await task;
+                return;
             } catch (Exception ex) {
                 onError?.Invoke(ex);
                 await Task.Delay(repetitionTimeouts[errorCount++]);
