@@ -20,7 +20,7 @@ public class BootstrapperTest
         private string successIp;
 
         public async Task<IChordResponseMessage> SendRequest(
-            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token = null)
+            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken token)
         {
             if (receiver.IpAddress.Equals(successIp))
             {
@@ -41,7 +41,7 @@ public class BootstrapperTest
     class AllPingsTimeoutRequestSenderMock : IChordClient
     {
         public async Task<IChordResponseMessage> SendRequest(
-            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token = null)
+            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken token)
         {
             await Task.Delay(2000);
             throw new TimeoutException($"request for { receiver } timed out!");
@@ -51,7 +51,7 @@ public class BootstrapperTest
     class AllPingsThrowRequestSenderMock : IChordClient
     {
         public async Task<IChordResponseMessage> SendRequest(
-            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken? token = null)
+            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken token)
         {
             await Task.Delay(20);
             throw new TimeoutException($"DNS error for { receiver }!");

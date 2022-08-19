@@ -1,7 +1,10 @@
 namespace Chord.Lib;
 
 using Microsoft.Extensions.Logging;
-using ProcessRequestFunc = Func<IChordRequestMessage, Task<IChordResponseMessage>>;
+using ProcessRequestFunc = Func<
+    IChordRequestMessage,
+    CancellationToken,
+    Task<IChordResponseMessage>>;
 
 public class ChordRequestReceiver
 {
@@ -39,16 +42,20 @@ public class ChordRequestReceiver
 
     #endregion Init
 
-    public async Task<IChordResponseMessage> ProcessAsync(IChordRequestMessage request)
-        => await handlers[request.Type](request);
+    public async Task<IChordResponseMessage> ProcessAsync(
+            IChordRequestMessage request, CancellationToken token)
+        => await handlers[request.Type](request, token);
 
-    private async Task<IChordResponseMessage> processUpdateSuccessor(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processUpdateSuccessor(
+        IChordRequestMessage request,
+        CancellationToken token)
     {
         const int timeoutInMillis = 10 * 1000;
 
         // ping the new successor to make sure it is healthy
         var status = await sender.HealthCheck(
-            nodeState.Local, request.NewSuccessor, ChordHealthStatus.Dead, timeoutInMillis);
+            nodeState.Local, request.NewSuccessor,
+            token, ChordHealthStatus.Dead, timeoutInMillis);
         bool canUpdate = status != ChordHealthStatus.Dead;
 
         // update the successor
@@ -62,7 +69,9 @@ public class ChordRequestReceiver
         };
     }
 
-    private async Task<IChordResponseMessage> processKeyLookup(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processKeyLookup(
+        IChordRequestMessage request,
+        CancellationToken token)
     {
         // handle the special case for being the initial node of the cluster
         // serving the first lookup request of a node join
@@ -71,14 +80,19 @@ public class ChordRequestReceiver
             // TODO: think of what else needs to be done here ...
 
         // perform key lookup and return the endpoint responsible for the key
-        var responder = await sender.SearchEndpointOfKey(request.RequestedResourceId, nodeState.Local);
+        var responder = await sender.SearchEndpointOfKey(
+            request.RequestedResourceId, nodeState.Local, token);
         return new ChordResponseMessage() { Responder = responder };
     }
 
-    private async Task<IChordResponseMessage> processHealthCheck(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processHealthCheck(
+            IChordRequestMessage request,
+            CancellationToken token)
         => await Task.FromResult(new ChordResponseMessage() { Responder = nodeState.Local });
 
-    private async Task<IChordResponseMessage> processInitNodeJoin(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processInitNodeJoin(
+        IChordRequestMessage request,
+        CancellationToken token)
     {
         var task = worker.IsReadyForDataCopy();
         bool readyForDataCopy = await task.TryRun(
@@ -92,10 +106,24 @@ public class ChordRequestReceiver
         };
     }
 
-    private async Task<IChordResponseMessage> processCommitNodeJoin(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processCommitNodeJoin(
+        IChordRequestMessage request,
+        CancellationToken token)
     {
+        // base case for creating a Chord ring with only 2 nodes
+        if (nodeState.Predecessor == null)
+        {
+            nodeState.UpdatePredecessor(request.NewSuccessor);
+            nodeState.UpdateSuccessor(request.NewSuccessor);
+            return await Task.FromResult(new ChordResponseMessage() {
+                Responder = nodeState.Local,
+                CommitSuccessful = true,
+                Predecessor = nodeState.Local
+            });
+        }
+
         var task = sender.UpdateSuccessor(
-            nodeState.Local, nodeState.Predecessor, request.NewSuccessor);
+            nodeState.Local, nodeState.Predecessor, request.NewSuccessor, token);
 
         bool commitSuccessful = await task.TryRun(
             (r) => r.CommitSuccessful,
@@ -113,7 +141,9 @@ public class ChordRequestReceiver
         };
     }
 
-    private async Task<IChordResponseMessage> processInitNodeLeave(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processInitNodeLeave(
+        IChordRequestMessage request,
+        CancellationToken token)
     {
         var task = worker.IsReadyForDataCopy();
         bool readyForDataCopy = await task.TryRun(
@@ -127,9 +157,12 @@ public class ChordRequestReceiver
         };
     }
 
-    private async Task<IChordResponseMessage> processCommitNodeLeave(IChordRequestMessage request)
+    private async Task<IChordResponseMessage> processCommitNodeLeave(
+        IChordRequestMessage request,
+        CancellationToken token)
     {
-        var task = sender.UpdateSuccessor(nodeState.Local, nodeState.Predecessor, request.NewSuccessor);
+        var task = sender.UpdateSuccessor(
+            nodeState.Local, nodeState.Predecessor, request.NewSuccessor, token);
 
         bool commitSuccessful = await task.TryRun(
             (r) => r.CommitSuccessful,

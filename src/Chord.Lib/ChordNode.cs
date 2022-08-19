@@ -38,11 +38,11 @@ public class ChordNode
     {
         this.config = config;
         this.payloadWorker = payloadWorker;
-
         nodeState = new ChordNodeState(local);
         fingerTable = new ChordFingerTable((k, t) => null, nodeState);
         sender = new ChordRequestSender(client, fingerTable);
         receiver = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
+        processor = new ChordEventProcessor(receiver);
         backgroundTaskCallback = new CancellationTokenSource();
     }
 
@@ -51,6 +51,7 @@ public class ChordNode
     private readonly ChordRequestReceiver receiver;
     private readonly ChordRequestSender sender;
     private readonly IChordPayloadWorker payloadWorker;
+    private readonly ChordEventProcessor processor;
     private readonly CancellationTokenSource backgroundTaskCallback;
     private ChordFingerTable fingerTable;
 
@@ -63,18 +64,22 @@ public class ChordNode
     public ChordHealthStatus NodeState => Local.State;
 
     public async Task<IChordResponseMessage> ProcessRequest(
-            IChordRequestMessage request)
-        => await receiver.ProcessAsync(request);
+        IChordRequestMessage request, CancellationToken token)
+    {
+        var chordEvent = new ChordEvent(request, ChordEventType.Incoming);
+        processor.Enqueue(chordEvent);
+        return await chordEvent.OnProcessingComplete(token);
+    }
 
-    public async Task JoinNetwork(IChordBootstrapper bootstrapper)
+    public async Task JoinNetwork(
+        IChordBootstrapper bootstrapper,
+        CancellationToken token)
     {
         // TODO: decouple the error handling with Action callbacks
 
         var local = Local;
         if (local.State != ChordHealthStatus.Starting)
             return;
-            // throw new InvalidOperationException(
-            //     "Node needs to be in 'Starting' state!");
 
         // phase 0: find an entrypoint into the chord network
         var bootstrap = await bootstrapper.FindBootstrapNode(sender, local);
@@ -83,20 +88,20 @@ public class ChordNode
                 "Cannot find a bootstrap node! Please try to join again!");
 
         // phase 1: determine the successor by a key lookup
-        var successor = await sender.IntiateSuccessor(bootstrap, local);
+        var successor = await sender.IntiateSuccessor(bootstrap, local, token);
         if (successor == null)
             throw new InvalidOperationException(
                 "Could not find a successor. Please try again!");
 
         // phase 2: initiate the join process
-        var response = await sender.InitiateNetworkJoin(local, successor);
+        var response = await sender.InitiateNetworkJoin(local, successor, token);
         if (!response.ReadyForDataCopy)
             throw new InvalidOperationException(
                 "Network join failed! Cannot copy payload data!");
         await payloadWorker.PreloadData(successor);
 
         // phase 4: finalize the join process
-        response = await sender.CommitNetworkJoin(local, successor);
+        response = await sender.CommitNetworkJoin(local, successor, token);
         if (!response.CommitSuccessful)
             throw new InvalidOperationException(
                 "Joining the network unexpectedly failed! Please try again!");
@@ -107,7 +112,7 @@ public class ChordNode
         nodeState.UpdatePredecessor(response.Predecessor);
         fingerTable = new ChordFingerTable(
             response.CachedFingerTable.ToDictionary(x => x.NodeId),
-            (k, t) => sender.SearchEndpointOfKey(k, local),
+            (k, t) => sender.SearchEndpointOfKey(k, local, t),
             nodeState);
 
         if (!fingerTable.AllFingers.Any())
@@ -115,10 +120,12 @@ public class ChordNode
 
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
+        #pragma warning disable CS4014 // call is not awaited
         createBackgroundTasks(backgroundTaskCallback.Token);
+        #pragma warning restore CS4014
     }
 
-    public async Task LeaveNetwork()
+    public async Task LeaveNetwork(CancellationToken token)
     {
         // phase 1: initiate the leave process
         Local.UpdateState(ChordHealthStatus.Leaving);
@@ -129,7 +136,7 @@ public class ChordNode
         var successor = nodeState.Successor.DeepClone();
         var predecessor = nodeState.Predecessor.DeepClone();
 
-        var response = await sender.InitiateNetworkLeave(local, successor);
+        var response = await sender.InitiateNetworkLeave(local, successor, token);
         if (!response.ReadyForDataCopy)
             throw new InvalidOperationException(
                 "Network leave failed! Cannot copy payload data!");
@@ -138,7 +145,8 @@ public class ChordNode
         await payloadWorker.BackupData(successor);
 
         // phase 3: finalize the leave process
-        response = await sender.CommitNetworkLeave(local, successor, predecessor);
+        response = await sender.CommitNetworkLeave(
+            local, successor, predecessor, token);
         if (!response.CommitSuccessful)
             throw new InvalidOperationException(
                 "Leaving the network unexpectedly failed! Please try again!");
@@ -153,29 +161,29 @@ public class ChordNode
     private async Task createBackgroundTasks(CancellationToken token)
     {
         // run the 'monitor health' task on a regular time schedule
-        var monitorTask = Task.Run(() => {
+        var monitorTask = async () => {
 
             while (!token.IsCancellationRequested)
             {
                 Task.Delay(config.MonitorHealthSchedule * 1000).Wait();
-                monitorFingerHealth(token);
+                await monitorFingerHealth(token);
                 if (token.IsCancellationRequested)
                     return;
             }
-        });
+        };
 
         // run the 'update table' task on a regular time schedule
-        var updateTableTask = Task.Run(() => {
+        var updateTableTask = async () => {
 
             while (!token.IsCancellationRequested)
             {
                 Task.Delay(config.UpdateTableSchedule * 1000).Wait();
-                fingerTable.BuildTable().Wait();
+                await fingerTable.BuildTable();
             }
-        });
+        };
 
         // wait until both tasks exited gracefully by cancellation
-        await Task.WhenAll(new Task[] { monitorTask, updateTableTask });
+        await Task.WhenAll(new Task[] { monitorTask(), updateTableTask() });
     }
 
     private static readonly ISet<ChordHealthStatus> unhealthyStates =
@@ -226,7 +234,7 @@ public class ChordNode
             .Select(async finger => (
                 Endpoint: finger,
                 HealthState: await sender.HealthCheck(
-                    Local, finger, failStatus, timeoutSecs, token)
+                    Local, finger, token, failStatus, timeoutSecs)
             ));
 
         return await Task.WhenAll(healthCheckTasks);

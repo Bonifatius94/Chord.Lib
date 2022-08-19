@@ -64,7 +64,14 @@ public interface IChordClient
     Task<IChordResponseMessage> SendRequest(
         IChordRequestMessage request,
         IChordEndpoint receiver,
-        CancellationToken? token = null);
+        CancellationToken token);
+}
+
+public interface IChordServer
+{
+    Task<IChordResponseMessage> ProcessRequest(
+        IChordRequestMessage request,
+        CancellationToken token);
 }
 
 public interface IExplorableChordEndpointGenerator
