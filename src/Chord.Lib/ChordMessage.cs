@@ -3,6 +3,7 @@ namespace Chord.Lib;
 public class ChordRequestMessage : IChordRequestMessage
 {
     // core request message features
+    public IChordEndpoint Receiver { get; set; }
     public ChordRequestType Type { get; set; }
     public ChordKey RequesterId { get; set; }
     public ChordKey RequestedResourceId { get; set; }

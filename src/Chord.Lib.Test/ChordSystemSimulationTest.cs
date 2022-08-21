@@ -33,7 +33,7 @@ class LoggerAdapter : ILogger
         => logger.WriteLine($"{DateTime.UtcNow} {logLevel}: {formatter(state, exception)}");
 }
 
-class IPv4NetworkMock : IChordClient
+class IPv4NetworkMock : IChordRequestProcessor
 {
     // info: this is a list instead of a dict on purpose as
     //       the NodeId might change during the node init
@@ -48,12 +48,12 @@ class IPv4NetworkMock : IChordClient
             ChordRequestType.CommitNodeJoin
         };
 
-    public async Task<IChordResponseMessage> SendRequest(
+    public async Task<IChordResponseMessage> ProcessRequest(
         IChordRequestMessage request,
-        IChordEndpoint receiver,
         CancellationToken token)
     {
         // look up the node that's receiving the request
+        var receiver = request.Receiver;
         var receivingNode = Nodes
             .Where(x => x.NodeId == receiver.NodeId)
             .FirstOrDefault();

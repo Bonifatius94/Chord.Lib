@@ -5,14 +5,14 @@ public class ChordRequestSender
     // TODO: synchronize the node state with an event sourcing approach
 
     public ChordRequestSender(
-        IChordClient client,
+        IChordRequestProcessor client,
         IChordNetworkRouter router)
     {
         this.client = client;
         this.router = router;
     }
 
-    private readonly IChordClient client;
+    private readonly IChordRequestProcessor client;
     private readonly IChordNetworkRouter router;
 
     // TODO: add fault tolerance with TryRun()
@@ -43,12 +43,12 @@ public class ChordRequestSender
             IChordEndpoint successor,
             CancellationToken token)
         => await client
-            .SendRequest(
+            .ProcessRequest(
                 new ChordRequestMessage() {
+                    Receiver = successor,
                     Type = ChordRequestType.InitNodeJoin,
                     RequesterId = local.NodeId
                 },
-                successor,
                 token);
 
     public async Task<IChordResponseMessage> CommitNetworkJoin(
@@ -56,13 +56,13 @@ public class ChordRequestSender
             IChordEndpoint successor,
             CancellationToken token)
         => await client
-            .SendRequest(
+            .ProcessRequest(
                 new ChordRequestMessage() {
+                    Receiver = successor,
                     Type = ChordRequestType.CommitNodeJoin,
                     RequesterId = local.NodeId,
                     NewSuccessor = local
                 },
-                successor,
                 token);
 
     public async Task<IChordResponseMessage> InitiateNetworkLeave(
@@ -70,12 +70,12 @@ public class ChordRequestSender
             IChordEndpoint successor,
             CancellationToken token)
         => await client
-            .SendRequest(
+            .ProcessRequest(
                 new ChordRequestMessage() {
+                    Receiver = successor,
                     Type = ChordRequestType.InitNodeLeave,
                     RequesterId = local.NodeId
                 },
-                successor,
                 token);
 
     public async Task<IChordResponseMessage> CommitNetworkLeave(
@@ -84,13 +84,13 @@ public class ChordRequestSender
             IChordEndpoint predecessor,
             CancellationToken token)
         => await client
-            .SendRequest(
+            .ProcessRequest(
                 new ChordRequestMessage() {
+                    Receiver = successor,
                     Type = ChordRequestType.CommitNodeLeave,
                     RequesterId = local.NodeId,
                     NewPredecessor = predecessor
                 },
-                successor,
                 token);
 
     public async Task<IChordEndpoint> SearchEndpointOfKey(
@@ -99,13 +99,13 @@ public class ChordRequestSender
             CancellationToken token,
             IChordEndpoint explicitReceiver = null)
         => await client
-            .SendRequest(
+            .ProcessRequest(
                 new ChordRequestMessage() {
+                    Receiver = explicitReceiver ?? router.FindBestFinger(key),
                     Type = ChordRequestType.KeyLookup,
                     RequesterId = local.NodeId,
                     RequestedResourceId = key
                 },
-                explicitReceiver ?? router.FindBestFinger(key),
                 token)
             .TryRun(
                 (r) => r.Responder,
@@ -119,12 +119,12 @@ public class ChordRequestSender
             ChordHealthStatus failStatus = ChordHealthStatus.Questionable,
             int timeoutInMillis = 10000)
         => await client
-            .SendRequest(
+            .ProcessRequest(
                 new ChordRequestMessage() {
+                    Receiver = receiver,
                     Type = ChordRequestType.HealthCheck,
                     RequesterId = local.NodeId,
                 },
-                receiver,
                 token)
             .TryRun(
                 (r) => r.Responder.State,
@@ -142,12 +142,12 @@ public class ChordRequestSender
             IChordEndpoint newSuccessor,
             CancellationToken token)
         => await client
-            .SendRequest(
+            .ProcessRequest(
                 new ChordRequestMessage() {
+                    Receiver = predecessor,
                     Type = ChordRequestType.UpdateSuccessor,
                     RequesterId = local.NodeId,
                     NewSuccessor = newSuccessor
                 },
-                predecessor,
                 token);
 }

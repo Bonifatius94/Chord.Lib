@@ -38,6 +38,7 @@ public interface IChordEndpoint
 public interface IChordRequestMessage
 {
     // core message features
+    IChordEndpoint Receiver { get; set; }
     ChordRequestType Type { get; set; }
     ChordKey RequesterId { get; set; }
     ChordKey RequestedResourceId { get; set; }
@@ -59,15 +60,7 @@ public interface IChordResponseMessage
     IEnumerable<IChordEndpoint> CachedFingerTable { get; set; }
 }
 
-public interface IChordClient
-{
-    Task<IChordResponseMessage> SendRequest(
-        IChordRequestMessage request,
-        IChordEndpoint receiver,
-        CancellationToken token);
-}
-
-public interface IChordServer
+public interface IChordRequestProcessor
 {
     Task<IChordResponseMessage> ProcessRequest(
         IChordRequestMessage request,

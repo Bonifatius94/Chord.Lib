@@ -17,7 +17,7 @@ public class ChordNodeConfiguration
 /// you need to provide a callback function for exchanging messages
 /// between chord endpoints, etc. (see constructor).
 /// </summary>
-public class ChordNode
+public class ChordNode : IChordRequestProcessor
 {
     #region Init
 
@@ -31,7 +31,7 @@ public class ChordNode
     /// controlling the node behavior.</param>
     public ChordNode(
         IChordEndpoint local,
-        IChordClient client,
+        IChordRequestProcessor client,
         IChordPayloadWorker payloadWorker,
         ChordNodeConfiguration config,
         ILogger logger = null)
@@ -40,19 +40,29 @@ public class ChordNode
         this.payloadWorker = payloadWorker;
         nodeState = new ChordNodeState(local);
         fingerTable = new ChordFingerTable((k, t) => null, nodeState);
-        sender = new ChordRequestSender(client, fingerTable);
-        receiver = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
-        processor = new ChordEventProcessor(receiver);
-        backgroundTaskCallback = new CancellationTokenSource();
+
+        var messageBus = new SynchronizedChordMessageBus();
+        var processor = new ChordEventProcessor(messageBus);
+        var outbox = new SynchronizedRequestProcessorProxy(messageBus, client);
+        sender = new ChordRequestSender(outbox, fingerTable);
+        var receiver = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
+        inbox = new SynchronizedRequestProcessorProxy(messageBus, receiver);
+
+        eventProcessingCallback = new CancellationTokenSource();
+        monitoringCallback = new CancellationTokenSource();
+
+        #pragma warning disable CS4014 // call is not awaited
+        processor.StartProcessingEventsAsDaemon(eventProcessingCallback.Token);
+        #pragma warning restore CS4014 // call is not awaited
     }
 
     private readonly ChordNodeState nodeState;
     private readonly ChordNodeConfiguration config;
-    private readonly ChordRequestReceiver receiver;
+    private readonly SynchronizedRequestProcessorProxy inbox;
     private readonly ChordRequestSender sender;
     private readonly IChordPayloadWorker payloadWorker;
-    private readonly ChordEventProcessor processor;
-    private readonly CancellationTokenSource backgroundTaskCallback;
+    private readonly CancellationTokenSource monitoringCallback;
+    private readonly CancellationTokenSource eventProcessingCallback;
     private ChordFingerTable fingerTable;
 
     #endregion Init
@@ -64,12 +74,8 @@ public class ChordNode
     public ChordHealthStatus NodeState => Local.State;
 
     public async Task<IChordResponseMessage> ProcessRequest(
-        IChordRequestMessage request, CancellationToken token)
-    {
-        var chordEvent = new ChordEvent(request, ChordEventType.Incoming);
-        processor.Enqueue(chordEvent);
-        return await chordEvent.OnProcessingComplete(token);
-    }
+            IChordRequestMessage request, CancellationToken token)
+        => await inbox.ProcessRequest(request, token);
 
     public async Task JoinNetwork(
         IChordBootstrapper bootstrapper,
@@ -121,7 +127,7 @@ public class ChordNode
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
         #pragma warning disable CS4014 // call is not awaited
-        createBackgroundTasks(backgroundTaskCallback.Token);
+        createBackgroundTasks(monitoringCallback.Token);
         #pragma warning restore CS4014
     }
 
@@ -153,7 +159,8 @@ public class ChordNode
         // TODO: what happens if the leave procedure fails?!
 
         // shut down all background tasks (health monitoring and finger table updates)
-        backgroundTaskCallback.Cancel();
+        monitoringCallback.Cancel();
+        eventProcessingCallback.Cancel();
     }
 
     #region BackgroundTasks

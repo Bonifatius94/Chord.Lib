@@ -6,7 +6,7 @@ using ProcessRequestFunc = Func<
     CancellationToken,
     Task<IChordResponseMessage>>;
 
-public class ChordRequestReceiver
+public class ChordRequestReceiver : IChordRequestProcessor
 {
     // TODO: synchronize the node state with an Actor-model event sourcing approach
 
@@ -42,7 +42,7 @@ public class ChordRequestReceiver
 
     #endregion Init
 
-    public async Task<IChordResponseMessage> ProcessAsync(
+    public async Task<IChordResponseMessage> ProcessRequest(
             IChordRequestMessage request, CancellationToken token)
         => await handlers[request.Type](request, token);
 

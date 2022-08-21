@@ -12,16 +12,17 @@ namespace Chord.Lib.Test.BootstrapperTest;
 
 public class BootstrapperTest
 {
-    class SpecificSuccessfulPingRequestSenderMock : IChordClient
+    class SpecificSuccessfulPingRequestSenderMock : IChordRequestProcessor
     {
         public SpecificSuccessfulPingRequestSenderMock(string successIp)
             => this.successIp = successIp;
 
         private string successIp;
 
-        public async Task<IChordResponseMessage> SendRequest(
-            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken token)
+        public async Task<IChordResponseMessage> ProcessRequest(
+            IChordRequestMessage request, CancellationToken token)
         {
+            var receiver = request.Receiver;
             if (receiver.IpAddress.Equals(successIp))
             {
                 return new ChordResponseMessage() {
@@ -38,23 +39,23 @@ public class BootstrapperTest
         }
     }
 
-    class AllPingsTimeoutRequestSenderMock : IChordClient
+    class AllPingsTimeoutRequestSenderMock : IChordRequestProcessor
     {
-        public async Task<IChordResponseMessage> SendRequest(
-            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken token)
+        public async Task<IChordResponseMessage> ProcessRequest(
+            IChordRequestMessage request, CancellationToken token)
         {
             await Task.Delay(2000);
-            throw new TimeoutException($"request for { receiver } timed out!");
+            throw new TimeoutException($"request for { request.Receiver } timed out!");
         }
     }
 
-    class AllPingsThrowRequestSenderMock : IChordClient
+    class AllPingsThrowRequestSenderMock : IChordRequestProcessor
     {
-        public async Task<IChordResponseMessage> SendRequest(
-            IChordRequestMessage request, IChordEndpoint receiver, CancellationToken token)
+        public async Task<IChordResponseMessage> ProcessRequest(
+            IChordRequestMessage request, CancellationToken token)
         {
             await Task.Delay(20);
-            throw new TimeoutException($"DNS error for { receiver }!");
+            throw new TimeoutException($"DNS error for { request.Receiver }!");
         }
     }
 

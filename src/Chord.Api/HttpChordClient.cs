@@ -6,11 +6,12 @@ using Chord.Lib;
 
 namespace Chord.Api;
 
-public class HttpChordClient : IChordClient
+public class HttpChordClient : IChordRequestProcessor
 {
-    public async Task<IChordResponseMessage> SendRequest(
-        IChordRequestMessage request, IChordEndpoint receiver, CancellationToken token)
+    public async Task<IChordResponseMessage> ProcessRequest(
+        IChordRequestMessage request, CancellationToken token)
     {
+        var receiver = request.Receiver;
         string url = $"http://{ receiver.IpAddress }:{ receiver.Port }/chord";
         string requestJson = JsonSerializer.Serialize(request); // TODO: check if this works
 
