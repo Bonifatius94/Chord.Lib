@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
 using System.Threading.Tasks;
 using Chord.Lib.Impl;
 using FluentAssertions;
@@ -34,7 +35,8 @@ public class TableCreationTest
                 networkNodes.Where(x => x.NodeId >= k).MinBy(x => x.NodeId)
                 ?? networkNodes.MinBy(x => x.NodeId) as IChordEndpoint),
             nodeState);
-        await fingerTable.BuildTable();
+        var cancelCallback = new CancellationTokenSource();
+        await fingerTable.BuildTable(cancelCallback.Token);
 
         // assert
         var actualNormFingerIds = fingerTable.AllFingers
@@ -69,7 +71,8 @@ public class FingerLookupTest
                 endpoints.MinBy(x => x.NodeId - k)),
             nodeState);
 
-        fingerTable.BuildTable().Wait();
+        var cancelCallback = new CancellationTokenSource();
+        fingerTable.BuildTable(cancelCallback.Token).Wait();
         return fingerTable;
     }
 

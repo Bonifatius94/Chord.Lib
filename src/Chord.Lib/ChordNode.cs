@@ -106,7 +106,7 @@ public class ChordNode : IChordRequestProcessor
                 "Network join failed! Cannot copy payload data!");
         await payloadWorker.PreloadData(successor);
 
-        // phase 4: finalize the join process
+        // phase 3: finalize the join process
         response = await sender.CommitNetworkJoin(local, successor, token);
         if (!response.CommitSuccessful)
             throw new InvalidOperationException(
@@ -122,7 +122,7 @@ public class ChordNode : IChordRequestProcessor
             nodeState);
 
         if (!fingerTable.AllFingers.Any())
-            await fingerTable.BuildTable();
+            await fingerTable.BuildTable(token);
 
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
@@ -174,8 +174,6 @@ public class ChordNode : IChordRequestProcessor
             {
                 Task.Delay(config.MonitorHealthSchedule * 1000).Wait();
                 await monitorFingerHealth(token);
-                if (token.IsCancellationRequested)
-                    return;
             }
         };
 
@@ -185,7 +183,7 @@ public class ChordNode : IChordRequestProcessor
             while (!token.IsCancellationRequested)
             {
                 Task.Delay(config.UpdateTableSchedule * 1000).Wait();
-                await fingerTable.BuildTable();
+                await fingerTable.BuildTable(token);
             }
         };
 

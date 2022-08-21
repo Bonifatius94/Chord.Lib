@@ -62,12 +62,6 @@ public class ChordFingerTable : IChordNetworkRouter
     public IEnumerable<IChordEndpoint> AllFingers
         => fingerTable.Values;
 
-    // public void UpdateSuccessor(IChordEndpoint newSuccessor)
-    //     => Successor = newSuccessor;
-
-    // public void UpdatePredecessor(IChordEndpoint newPredecessor)
-    //     => Predecessor = newPredecessor;
-
     #region Forwarding
 
     /// <summary>
@@ -101,13 +95,12 @@ public class ChordFingerTable : IChordNetworkRouter
     /// side of the chord token-ring.
     /// </summary>
     /// <param name="token">A cancellation token to cancel the procedure gracefully.</param>
-    public async Task BuildTable(CancellationToken? token = null)
+    public async Task BuildTable(CancellationToken token)
     {
         var fingerKeys = optimalFingerKeys(Local);
         var newFingers = await findFingersAsync(fingerKeys, token);
         fingerTable = new ConcurrentDictionary<ChordKey, IChordEndpoint>(
             newFingers.ToDictionary(x => x.NodeId));
-        
 
         // TODO: what about Chord ring fusions?!
         //       -> re-scan the network with IExplorableEndpointProvider
@@ -121,17 +114,13 @@ public class ChordFingerTable : IChordNetworkRouter
             .ToList();
 
     private async Task<IEnumerable<IChordEndpoint>> findFingersAsync(
-        IList<ChordKey> fingerKeys,
-        CancellationToken? token = null)
+        IList<ChordKey> fingerKeys, CancellationToken token)
     {
         var lookupTasks = new Task<IChordEndpoint>[0];
 
         await Task.Run(() => {
 
-            var timeoutTask = token == null
-                ? Task.Delay(updateTableTimeoutMillis)
-                : Task.Delay(updateTableTimeoutMillis, token.Value);
-
+            var timeoutTask = Task.Delay(updateTableTimeoutMillis, token);
             var tokenSource = new CancellationTokenSource();
             lookupTasks = fingerKeys
                 .Select(x => lookupKeyAsync(x, tokenSource.Token))
