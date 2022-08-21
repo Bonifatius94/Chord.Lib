@@ -67,10 +67,10 @@ public interface IChordRequestProcessor
         CancellationToken token);
 }
 
-public interface IExplorableChordEndpointGenerator
-{
-    IEnumerable<IChordEndpoint> GenerateEndpoints();
-}
+// public interface IExplorableChordEndpointGenerator
+// {
+//     IEnumerable<IChordEndpoint> GenerateEndpoints();
+// }
 
 public interface IChordBootstrapper
 {

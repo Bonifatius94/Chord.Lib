@@ -1,6 +1,8 @@
+using System.Collections;
+
 namespace Chord.Lib.Impl;
 
-public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
+public class IPv4EndpointGenerator : IEnumerable<IChordEndpoint>
 {
     public IPv4EndpointGenerator(
         IIpSettings ipConfig,
@@ -28,7 +30,7 @@ public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
         return (firstIp, lastIp);
     }
 
-    public IEnumerable<IChordEndpoint> GenerateEndpoints()
+    public IEnumerator<IChordEndpoint> GetEnumerator()
     {
         var chordPort = ipConfig.ChordPort;
         var (firstIp, lastIp) = getFirstAndLastAddress();
@@ -39,8 +41,12 @@ public class IPv4EndpointGenerator : IExplorableChordEndpointGenerator
                 addr.FromBigInt().ToString(),
                 chordPort.ToString()
             ));
-        return allEndpoints;
+
+        foreach (var endpoint in allEndpoints)
+            yield return endpoint;
     }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
 
 public static class IPv4ToBigInt

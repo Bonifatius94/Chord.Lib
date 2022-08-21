@@ -3,7 +3,7 @@ namespace Chord.Lib;
 public class ChordBootstrapper : IChordBootstrapper
 {
     public ChordBootstrapper(
-        IExplorableChordEndpointGenerator endpointGenerator,
+        IEnumerable<IChordEndpoint> endpointGenerator,
         int pingTimeoutMillis = 1000,
         int numParallelPings = 128)
     {
@@ -12,7 +12,7 @@ public class ChordBootstrapper : IChordBootstrapper
         this.numParallelPings = numParallelPings;
     }
 
-    private readonly IExplorableChordEndpointGenerator endpointGenerator;
+    private readonly IEnumerable<IChordEndpoint> endpointGenerator;
     private readonly int pingTimeoutMillis;
     private readonly int numParallelPings;
 
@@ -35,10 +35,9 @@ public class ChordBootstrapper : IChordBootstrapper
                 return successStates.Contains(state) ? receiver : null;
             };
 
-        var allEndpoints = endpointGenerator.GenerateEndpoints();
         // TODO: don't let local node ping itself
 
-        foreach (var endpointsToPing in allEndpoints.Chunk(numParallelPings))
+        foreach (var endpointsToPing in endpointGenerator.Chunk(numParallelPings))
         {
             var pingTasks = endpointsToPing.Select(e => ping(e)).ToArray();
 

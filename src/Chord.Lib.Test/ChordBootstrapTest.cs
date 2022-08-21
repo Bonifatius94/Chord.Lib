@@ -77,7 +77,7 @@ public class BootstrapperTest
         var clientMock = new SpecificSuccessfulPingRequestSenderMock(expBootstrapIp);
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
-        var local = endpointGen.GenerateEndpoints().First();
+        var local = endpointGen.First();
         var sender = new ChordRequestSender(clientMock, null);
 
         var sut = new ChordBootstrapper(endpointGen);
@@ -93,7 +93,7 @@ public class BootstrapperTest
         var clientMock = new AllPingsTimeoutRequestSenderMock();
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
-        var local = endpointGen.GenerateEndpoints().First();
+        var local = endpointGen.First();
         var sender = new ChordRequestSender(clientMock, null);
 
         var sut = new ChordBootstrapper(endpointGen);
@@ -108,7 +108,7 @@ public class BootstrapperTest
         var clientMock = new AllPingsThrowRequestSenderMock();
         var endpointGen = new IPv4EndpointGenerator(
             ipConfigMock, (k) => new ChordKey(k, keySpace));
-        var local = endpointGen.GenerateEndpoints().First();
+        var local = endpointGen.First();
         var sender = new ChordRequestSender(clientMock, null);
 
         var sut = new ChordBootstrapper(endpointGen);
