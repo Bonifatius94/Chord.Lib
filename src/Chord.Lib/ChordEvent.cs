@@ -1,11 +1,5 @@
 namespace Chord.Lib;
 
-public enum ChordEventType
-{
-    Incoming,
-    Outgoing
-}
-
 public class ChordEvent
 {
     internal ChordEvent(
@@ -18,7 +12,6 @@ public class ChordEvent
 
     private readonly IChordRequestProcessor processor;
     public IChordRequestMessage Request { get; private set; }
-    public ChordEventType Direction { get; private set; } = ChordEventType.Incoming;
     public bool IsProcessingComplete { get; private set; } = false;
     public IChordResponseMessage Response { get; private set; } = null;
 
