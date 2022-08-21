@@ -5,12 +5,13 @@ using Chord.Config;
 using Chord.Lib;
 using Chord.Lib.Impl;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 var app = WebApplication.Create();
 var node = await ConfigureChord();
 app.MapPost("/", async ([FromBody] ChordRequestMessage request, CancellationToken token)
-    => new OkObjectResult((ChordResponseMessage)await node.ProcessRequest(request, token)));
+    => Results.Ok((ChordResponseMessage)await node.ProcessRequest(request, token)));
 app.Run();
 
 async Task<ChordNode> ConfigureChord()
