@@ -38,7 +38,8 @@ public class ChordNode : IChordRequestProcessor
     {
         this.config = config;
         this.payloadWorker = payloadWorker;
-        nodeState = new ChordNodeState(local);
+
+        nodeState = new ChordNodeState(local, () => fingerTable.FingerCount);
         fingerTable = new ChordFingerTable((k, t) => null, nodeState);
 
         var messageBus = new SynchronizedChordMessageBus();
@@ -93,24 +94,32 @@ public class ChordNode : IChordRequestProcessor
             throw new InvalidOperationException(
                 "Cannot find a bootstrap node! Please try to join again!");
 
-        // phase 1: determine the successor by a key lookup
-        var successor = await sender.IntiateSuccessor(bootstrap, local, token);
-        if (successor == null)
-            throw new InvalidOperationException(
-                "Could not find a successor. Please try again!");
+        var successor = local;
+        IChordResponseMessage response = new ChordResponseMessage() {
+            Predecessor = null,
+            CachedFingerTable = new List<IChordEndpoint>() { local }
+        };
+        if (bootstrap.NodeId != local.NodeId)
+        {
+            // phase 1: determine the successor by a key lookup
+            successor = await sender.IntiateSuccessor(bootstrap, local, token);
+            if (successor == null)
+                throw new InvalidOperationException(
+                    "Could not find a successor. Please try again!");
 
-        // phase 2: initiate the join process
-        var response = await sender.InitiateNetworkJoin(local, successor, token);
-        if (!response.ReadyForDataCopy)
-            throw new InvalidOperationException(
-                "Network join failed! Cannot copy payload data!");
-        await payloadWorker.PreloadData(successor);
+            // phase 2: initiate the join process
+            response = await sender.InitiateNetworkJoin(local, successor, token);
+            if (!response.ReadyForDataCopy)
+                throw new InvalidOperationException(
+                    "Network join failed! Cannot copy payload data!");
+            await payloadWorker.PreloadData(successor);
 
-        // phase 3: finalize the join process
-        response = await sender.CommitNetworkJoin(local, successor, token);
-        if (!response.CommitSuccessful)
-            throw new InvalidOperationException(
-                "Joining the network unexpectedly failed! Please try again!");
+            // phase 3: finalize the join process
+            response = await sender.CommitNetworkJoin(local, successor, token);
+            if (!response.CommitSuccessful)
+                throw new InvalidOperationException(
+                    "Joining the network unexpectedly failed! Please try again!");
+        }
 
         // apply the node settings
         local.UpdateState(ChordHealthStatus.Idle);
@@ -127,7 +136,7 @@ public class ChordNode : IChordRequestProcessor
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
         #pragma warning disable CS4014 // call is not awaited
-        createBackgroundTasks(monitoringCallback.Token);
+        Task.Run(() => createBackgroundTasks(monitoringCallback.Token));
         #pragma warning restore CS4014
     }
 

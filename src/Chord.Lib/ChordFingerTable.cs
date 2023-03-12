@@ -4,12 +4,19 @@ using KeyLookupFunc = Func<ChordKey, CancellationToken, Task<IChordEndpoint>>;
 
 public class ChordNodeState
 {
-    public ChordNodeState(IChordEndpoint local)
-        => Local = local;
+    public ChordNodeState(IChordEndpoint local, Func<int> getFingerCount = null)
+    {
+        Local = local;
+        this.getFingerCount = getFingerCount;
+    }
+
+    private Func<int> getFingerCount;
 
     public IChordEndpoint Local { get; private set; }
     public IChordEndpoint Successor { get; private set; }
     public IChordEndpoint Predecessor { get; private set; }
+
+    public int FingerCount => getFingerCount?.Invoke() ?? 0;
 
     public void UpdateSuccessor(IChordEndpoint newSuccessor)
         => Successor = newSuccessor;
@@ -20,6 +27,7 @@ public class ChordNodeState
 
 public interface IChordNetworkRouter
 {
+    public int FingerCount { get; }
     IChordEndpoint FindBestFinger(ChordKey key);
 }
 
@@ -61,6 +69,8 @@ public class ChordFingerTable : IChordNetworkRouter
 
     public IEnumerable<IChordEndpoint> AllFingers
         => fingerTable.Values;
+
+    public int FingerCount => AllFingers?.Count() ?? 0;
 
     #region Forwarding
 

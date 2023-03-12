@@ -79,6 +79,9 @@ public class ChordRequestReceiver : IChordRequestProcessor
             return await Task.FromResult(new ChordResponseMessage() { Responder = nodeState.Local });
             // TODO: think of what else needs to be done here ...
 
+        if (nodeState.FingerCount == 1)
+            return new ChordResponseMessage() { Responder = nodeState.Local };
+
         // perform key lookup and return the endpoint responsible for the key
         var responder = await sender.SearchEndpointOfKey(
             request.RequestedResourceId, nodeState.Local, token);
@@ -118,7 +121,11 @@ public class ChordRequestReceiver : IChordRequestProcessor
             return await Task.FromResult(new ChordResponseMessage() {
                 Responder = nodeState.Local,
                 CommitSuccessful = true,
-                Predecessor = nodeState.Local
+                Predecessor = nodeState.Local,
+                CachedFingerTable = new List<IChordEndpoint>() {
+                    nodeState.Local,
+                    request.NewSuccessor
+                }
             });
         }
 

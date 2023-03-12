@@ -25,8 +25,11 @@ public class ChordRequestSender
     {
         // TODO: think about stopping to try after a timeout
 
+        if (bootstrapNode.NodeId == local.NodeId)
+            return local;
+
         while (true)
-        { 
+        {
             var successor = await SearchEndpointOfKey(
                 local.NodeId, local, token, bootstrapNode);
 
