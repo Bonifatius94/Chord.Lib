@@ -42,19 +42,9 @@ public class ChordNode : IChordRequestProcessor
         nodeState = new ChordNodeState(local, () => fingerTable.FingerCount);
         fingerTable = new ChordFingerTable((k, t) => null, nodeState);
 
-        // var messageBus = new SynchronizedChordMessageBus();
-        // var processor = new ChordEventProcessor(messageBus);
-        // var outbox = new SynchronizedRequestProcessorProxy(messageBus, client);
         sender = new ChordRequestSender(client, fingerTable);
         inbox = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
-        // inbox = new SynchronizedRequestProcessorProxy(messageBus, receiver);
-
-        eventProcessingCallback = new CancellationTokenSource();
         monitoringCallback = new CancellationTokenSource();
-
-        // #pragma warning disable CS4014 // call is not awaited
-        // processor.StartProcessingEventsAsDaemon(eventProcessingCallback.Token);
-        // #pragma warning restore CS4014 // call is not awaited
     }
 
     private readonly ChordNodeState nodeState;
@@ -63,7 +53,6 @@ public class ChordNode : IChordRequestProcessor
     private readonly ChordRequestSender sender;
     private readonly IChordPayloadWorker payloadWorker;
     private readonly CancellationTokenSource monitoringCallback;
-    private readonly CancellationTokenSource eventProcessingCallback;
     private ChordFingerTable fingerTable;
 
     #endregion Init
@@ -169,7 +158,6 @@ public class ChordNode : IChordRequestProcessor
 
         // shut down all background tasks (health monitoring and finger table updates)
         monitoringCallback.Cancel();
-        eventProcessingCallback.Cancel();
     }
 
     #region BackgroundTasks
