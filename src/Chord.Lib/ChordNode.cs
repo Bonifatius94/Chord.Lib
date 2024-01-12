@@ -11,9 +11,9 @@ public class ChordNodeConfiguration
 
 /// <summary>
 /// This class provides all core functionality of the chord protocol.
-/// 
+///
 /// Note that this is supposed to be a logical chord endpoint abstracting
-/// the actual network traffic. If you want to use this code properly, 
+/// the actual network traffic. If you want to use this code properly,
 /// you need to provide a callback function for exchanging messages
 /// between chord endpoints, etc. (see constructor).
 /// </summary>
@@ -42,24 +42,24 @@ public class ChordNode : IChordRequestProcessor
         nodeState = new ChordNodeState(local, () => fingerTable.FingerCount);
         fingerTable = new ChordFingerTable((k, t) => null, nodeState);
 
-        var messageBus = new SynchronizedChordMessageBus();
-        var processor = new ChordEventProcessor(messageBus);
-        var outbox = new SynchronizedRequestProcessorProxy(messageBus, client);
-        sender = new ChordRequestSender(outbox, fingerTable);
-        var receiver = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
-        inbox = new SynchronizedRequestProcessorProxy(messageBus, receiver);
+        // var messageBus = new SynchronizedChordMessageBus();
+        // var processor = new ChordEventProcessor(messageBus);
+        // var outbox = new SynchronizedRequestProcessorProxy(messageBus, client);
+        sender = new ChordRequestSender(client, fingerTable);
+        inbox = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
+        // inbox = new SynchronizedRequestProcessorProxy(messageBus, receiver);
 
         eventProcessingCallback = new CancellationTokenSource();
         monitoringCallback = new CancellationTokenSource();
 
-        #pragma warning disable CS4014 // call is not awaited
-        processor.StartProcessingEventsAsDaemon(eventProcessingCallback.Token);
-        #pragma warning restore CS4014 // call is not awaited
+        // #pragma warning disable CS4014 // call is not awaited
+        // processor.StartProcessingEventsAsDaemon(eventProcessingCallback.Token);
+        // #pragma warning restore CS4014 // call is not awaited
     }
 
     private readonly ChordNodeState nodeState;
     private readonly ChordNodeConfiguration config;
-    private readonly SynchronizedRequestProcessorProxy inbox;
+    private readonly IChordRequestProcessor inbox;
     private readonly ChordRequestSender sender;
     private readonly IChordPayloadWorker payloadWorker;
     private readonly CancellationTokenSource monitoringCallback;
@@ -240,7 +240,7 @@ public class ChordNode : IChordRequestProcessor
 
     private async Task<IEnumerable<(IChordEndpoint, ChordHealthStatus)>> queryHealthStates(
         IEnumerable<IChordEndpoint> fingers,
-        int timeoutSecs, 
+        int timeoutSecs,
         ChordHealthStatus failStatus,
         CancellationToken token)
     {
