@@ -1,6 +1,6 @@
 
 # use the official Microsoft .NET build image
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build-env
 
 # move to the src target dir
 WORKDIR /app/src
