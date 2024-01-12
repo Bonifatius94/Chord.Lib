@@ -16,11 +16,8 @@ public class ChordBootstrapper : IChordBootstrapper
     private readonly int pingTimeoutMillis;
     private readonly int numParallelPings;
 
-    private static readonly HashSet<ChordHealthStatus> successStates =
-        new HashSet<ChordHealthStatus>() {
-            ChordHealthStatus.Starting,
-            ChordHealthStatus.Idle
-        };
+    private bool isSuccessState(ChordHealthStatus state)
+        => state == ChordHealthStatus.Starting || state == ChordHealthStatus.Idle;
 
     public async Task<IChordEndpoint> FindBootstrapNode(
         ChordRequestSender sender, IChordEndpoint local)
@@ -32,7 +29,7 @@ public class ChordBootstrapper : IChordBootstrapper
                     receiver,
                     timeoutInMillis: pingTimeoutMillis,
                     token: cancelCallback.Token);
-                return successStates.Contains(state) ? receiver : null;
+                return isSuccessState(state) ? receiver : null;
             };
 
         // TODO: don't let local node ping itself

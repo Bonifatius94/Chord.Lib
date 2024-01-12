@@ -64,7 +64,7 @@ public class ChordFingerTable : IChordNetworkRouter
     private IChordEndpoint Successor => state.Successor;
     private IChordEndpoint Predecessor => state.Predecessor;
 
-    private IDictionary<ChordKey, IChordEndpoint> fingerTable = 
+    private IDictionary<ChordKey, IChordEndpoint> fingerTable =
         new ConcurrentDictionary<ChordKey, IChordEndpoint>();
 
     public IEnumerable<IChordEndpoint> AllFingers
@@ -99,7 +99,7 @@ public class ChordFingerTable : IChordNetworkRouter
     /// <summary>
     /// Scan the network for other Chord nodes managing given keys
     /// and remember those endpoints as fingers.
-    /// 
+    ///
     /// The keys to be looked up are not follow the pattern of exponentially
     /// growing distances between the keys up to a key roughly at the opposite
     /// side of the chord token-ring.
