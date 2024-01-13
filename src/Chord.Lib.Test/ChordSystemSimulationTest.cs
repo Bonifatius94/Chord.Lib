@@ -35,7 +35,7 @@ public class ChordNetworkSimulationTest
                 chordPort.ToString()))
             .ToList();
 
-        var networkClient = new IPv4NetworkMock();
+        var networkClient = new VirtualIPv4Network();
         var nodes = endpoints
             .Select(local =>
                 new ChordNode(

@@ -22,7 +22,7 @@ public class SingleNodeJoinTest
     public async Task JoinInitialTwoNodesSync()
     {
         int numNodes = 2;
-        var httpClient = new IPv4NetworkMock();
+        var httpClient = new VirtualIPv4Network();
         var endpoints = GenerateEndpoints(numNodes).ToList();
         var bootstrapper = Substitute.For<IChordBootstrapper>();
         bootstrapper.FindBootstrapNode(default, default)
@@ -49,7 +49,7 @@ public class SingleNodeJoinTest
     public async Task JoinInitialTwoNodesParallel()
     {
         int numNodes = 2;
-        var httpClient = new IPv4NetworkMock();
+        var httpClient = new VirtualIPv4Network();
         var endpoints = GenerateEndpoints(numNodes).ToList();
         var bootstrapper = Substitute.For<IChordBootstrapper>();
         bootstrapper.FindBootstrapNode(default, default)
