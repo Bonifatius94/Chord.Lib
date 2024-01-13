@@ -25,10 +25,8 @@ public class ChordBootstrapper : IChordBootstrapper
         var cancelCallback = new CancellationTokenSource();
         var ping = async (IChordEndpoint receiver) => {
                 var state = await sender.HealthCheck(
-                    local,
-                    receiver,
-                    timeoutInMillis: pingTimeoutMillis,
-                    token: cancelCallback.Token);
+                    local, receiver, cancelCallback.Token,
+                    timeoutInMillis: pingTimeoutMillis);
                 return isSuccessState(state) ? receiver : null;
             };
 

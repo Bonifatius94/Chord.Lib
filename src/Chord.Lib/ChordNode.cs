@@ -39,10 +39,10 @@ public class ChordNode : IChordRequestProcessor
         this.config = config;
         this.payloadWorker = payloadWorker;
 
-        nodeState = new ChordNodeState(local, () => fingerTable.FingerCount);
-        fingerTable = new ChordFingerTable((k, t) => null, nodeState);
+        nodeState = new ChordNodeState(local, () => FingerTable.FingerCount);
+        FingerTable = new ChordFingerTable((k, t) => null, nodeState);
 
-        sender = new ChordRequestSender(client, fingerTable);
+        sender = new ChordRequestSender(client, FingerTable);
         inbox = new ChordRequestReceiver(nodeState, sender, payloadWorker, logger);
         monitoringCallback = new CancellationTokenSource();
     }
@@ -53,7 +53,7 @@ public class ChordNode : IChordRequestProcessor
     private readonly ChordRequestSender sender;
     private readonly IChordPayloadWorker payloadWorker;
     private readonly CancellationTokenSource monitoringCallback;
-    private ChordFingerTable fingerTable;
+    public ChordFingerTable FingerTable;
 
     #endregion Init
 
@@ -114,13 +114,13 @@ public class ChordNode : IChordRequestProcessor
         local.UpdateState(ChordHealthStatus.Idle);
         nodeState.UpdateSuccessor(successor);
         nodeState.UpdatePredecessor(response.Predecessor);
-        fingerTable = new ChordFingerTable(
+        FingerTable = new ChordFingerTable(
             response.CachedFingerTable.ToDictionary(x => x.NodeId),
             (k, t) => sender.SearchEndpointOfKey(k, local, t),
             nodeState);
 
-        if (!fingerTable.AllFingers.Any())
-            await fingerTable.BuildTable(token);
+        if (!FingerTable.AllFingers.Any())
+            await FingerTable.BuildTable(token);
 
         // start the health monitoring / finger table update
         // procedures as scheduled background tasks
@@ -180,7 +180,7 @@ public class ChordNode : IChordRequestProcessor
             while (!token.IsCancellationRequested)
             {
                 Task.Delay(config.UpdateTableSchedule * 1000).Wait();
-                await fingerTable.BuildTable(token);
+                await FingerTable.BuildTable(token);
             }
         };
 
@@ -196,7 +196,7 @@ public class ChordNode : IChordRequestProcessor
 
     private async Task monitorFingerHealth(CancellationToken token)
     {
-        var cachedFingers = fingerTable.AllFingers.ToList();
+        var cachedFingers = FingerTable.AllFingers.ToList();
 
         var firstHealthCheck = async (IEnumerable<IChordEndpoint> fingers, CancellationToken token)
             => await queryHealthStates(

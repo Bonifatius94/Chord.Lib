@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Chord.Lib.Impl;
 using Microsoft.Extensions.Logging;
 using Xunit.Abstractions;
 
@@ -29,20 +30,28 @@ class LoggerAdapter : ILogger
         => logger.WriteLine($"{DateTime.UtcNow} {logLevel}: {formatter(state, exception)}");
 }
 
-class IPv4NetworkMock : IChordRequestProcessor
+class VirtualIPv4Network : IChordRequestProcessor
 {
-    // info: this is a list instead of a dict on purpose as
-    //       the NodeId might change during the node init
+    // info: This is a plain list instead of a dict on purpose.
+    //       A dict with NodeId as key can fail because the
+    //       NodeId might change during init procedure.
     public List<ChordNode> Nodes { get; set; }
         = new List<ChordNode>();
 
-    private HashSet<ChordRequestType> interceptTypes =
-        new HashSet<ChordRequestType>() {
-            ChordRequestType.KeyLookup,
-            ChordRequestType.UpdateSuccessor,
-            ChordRequestType.InitNodeJoin,
-            ChordRequestType.CommitNodeJoin
-        };
+    public void RegisterNode(ChordNode node) => Nodes.Add(node);
+
+    public void PopulateNetwork(int numNodes)
+    {
+        if (numNodes > 254) throw new ArgumentException(
+            "Type C IPv4 network does not support more than 254 nodes");
+
+        var config = new ChordNodeConfiguration() { UpdateTableSchedule = 1 };
+        var worker = new ZeroProtocolPayloadWorker();
+        Nodes = Enumerable.Range(1, numNodes)
+            .Select(id => new IPv4Endpoint($"192.168.178.{id}", "5000", 254))
+            .Select(e => new ChordNode(e, this, worker, config))
+            .ToList();
+    }
 
     public async Task<IChordResponseMessage> ProcessRequest(
         IChordRequestMessage request,
